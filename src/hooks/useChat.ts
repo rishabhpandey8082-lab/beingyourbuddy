@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
-import { ConversationMode } from "@/components/ModeSelector";
 
 type Message = { role: "user" | "assistant"; content: string };
+type ConversationMode = "friend" | "interviewer" | "mentor" | "studybuddy" | "therapist";
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
 
