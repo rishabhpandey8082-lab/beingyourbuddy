@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
-import { MessageCircle, Briefcase, GraduationCap } from "lucide-react";
+import { MessageCircle, Briefcase, GraduationCap, BookOpen, Heart } from "lucide-react";
 
-export type ConversationMode = "friend" | "interviewer" | "mentor";
+export type ConversationMode = "friend" | "interviewer" | "mentor" | "studybuddy" | "therapist";
 
 interface ModeSelectorProps {
   currentMode: ConversationMode;
@@ -27,11 +27,23 @@ const modes = [
     icon: GraduationCap,
     description: "Learn & grow",
   },
+  {
+    id: "studybuddy" as const,
+    label: "Study Buddy",
+    icon: BookOpen,
+    description: "Study together",
+  },
+  {
+    id: "therapist" as const,
+    label: "Therapist",
+    icon: Heart,
+    description: "Reflect & heal",
+  },
 ];
 
 const ModeSelector = ({ currentMode, onModeChange }: ModeSelectorProps) => {
   return (
-    <div className="flex gap-2 p-1 rounded-2xl glass">
+    <div className="flex flex-wrap justify-center gap-2 p-1.5 rounded-2xl glass max-w-xl">
       {modes.map((mode) => {
         const Icon = mode.icon;
         const isActive = currentMode === mode.id;
@@ -40,7 +52,7 @@ const ModeSelector = ({ currentMode, onModeChange }: ModeSelectorProps) => {
           <motion.button
             key={mode.id}
             onClick={() => onModeChange(mode.id)}
-            className={`relative flex items-center gap-2 px-4 py-2.5 rounded-xl transition-colors ${
+            className={`relative flex items-center gap-2 px-3 py-2 rounded-xl transition-colors ${
               isActive
                 ? "text-primary-foreground"
                 : "text-muted-foreground hover:text-foreground"
