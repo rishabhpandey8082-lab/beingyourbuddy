@@ -5,13 +5,18 @@ type Message = { role: "user" | "assistant"; content: string };
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
 
+interface ChatOptions {
+  userName?: string | null;
+  conversationContext?: string;
+}
+
 export const useChat = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [currentResponse, setCurrentResponse] = useState("");
 
   const sendMessage = useCallback(
-    async (content: string, mode: ConversationMode): Promise<string> => {
+    async (content: string, mode: ConversationMode, options?: ChatOptions): Promise<string> => {
       const userMessage: Message = { role: "user", content };
       const updatedMessages = [...messages, userMessage];
       setMessages(updatedMessages);
@@ -27,7 +32,12 @@ export const useChat = () => {
             "Content-Type": "application/json",
             Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           },
-          body: JSON.stringify({ messages: updatedMessages, mode }),
+          body: JSON.stringify({ 
+            messages: updatedMessages, 
+            mode,
+            userName: options?.userName,
+            conversationContext: options?.conversationContext,
+          }),
         });
 
         if (!response.ok) {

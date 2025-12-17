@@ -31,8 +31,65 @@ const modePrompts = {
 - Motivate without being pushy
 - Share insights and wisdom when relevant
 - Ask thoughtful questions to guide understanding
-- Celebrate progress and effort`
+- Celebrate progress and effort`,
+
+  studybuddy: `You are YourBuddy in Study Buddy Mode. You're an enthusiastic learning companion who makes studying fun. You:
+- Help explain concepts in simple, memorable ways
+- Create mnemonics and analogies to aid understanding
+- Quiz the user on material when they ask
+- Break down complex topics into digestible chunks
+- Celebrate small wins and progress
+- Suggest study techniques and strategies
+- Keep energy up with encouraging words
+- Ask if they want to test their knowledge`,
+
+  therapist: `You are YourBuddy in Therapist Mode. You are a gentle, reflective companion who helps process emotions (you are NOT a medical professional). You:
+- Create a safe, non-judgmental space for sharing
+- Listen actively and reflect back what you hear
+- Ask open-ended questions to encourage exploration
+- Help identify and name emotions
+- Suggest healthy coping strategies when appropriate
+- Never diagnose or provide medical advice
+- Encourage professional help when needed
+- Use calming, measured language
+- Validate feelings without fixing them`
 };
+
+// Simple emotion detection keywords
+const emotionKeywords = {
+  sad: ["sad", "depressed", "down", "unhappy", "crying", "tears", "lonely", "hopeless", "grief", "miss", "lost"],
+  stressed: ["stressed", "anxious", "overwhelmed", "worried", "nervous", "panic", "pressure", "deadline", "too much"],
+  confident: ["great", "amazing", "awesome", "excited", "happy", "confident", "proud", "achieved", "success", "won"],
+  frustrated: ["frustrated", "angry", "annoyed", "irritated", "mad", "furious", "hate", "can't stand"],
+  neutral: []
+};
+
+function detectEmotion(text: string): string {
+  const lowerText = text.toLowerCase();
+  
+  for (const [emotion, keywords] of Object.entries(emotionKeywords)) {
+    if (keywords.some(keyword => lowerText.includes(keyword))) {
+      return emotion;
+    }
+  }
+  
+  return "neutral";
+}
+
+function getEmotionalAdjustment(emotion: string): string {
+  switch (emotion) {
+    case "sad":
+      return "\n\nNote: The user seems to be feeling down. Be extra gentle, warm, and supportive in your response. Acknowledge their feelings without being patronizing.";
+    case "stressed":
+      return "\n\nNote: The user seems stressed or anxious. Use a calm, reassuring tone. Help them feel grounded and offer perspective without dismissing their concerns.";
+    case "confident":
+      return "\n\nNote: The user seems in a positive mood. Match their energy and celebrate with them while staying genuine.";
+    case "frustrated":
+      return "\n\nNote: The user seems frustrated. Acknowledge their feelings, show understanding, and avoid being dismissive. Let them vent if needed.";
+    default:
+      return "";
+  }
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -40,7 +97,7 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, mode = "friend" } = await req.json();
+    const { messages, mode = "friend", userName, conversationContext } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     
     if (!LOVABLE_API_KEY) {
@@ -49,8 +106,25 @@ serve(async (req) => {
     }
 
     const systemPrompt = modePrompts[mode as keyof typeof modePrompts] || modePrompts.friend;
+    
+    // Detect emotion from the latest user message
+    const latestUserMessage = messages.filter((m: any) => m.role === "user").pop()?.content || "";
+    const detectedEmotion = detectEmotion(latestUserMessage);
+    const emotionalAdjustment = getEmotionalAdjustment(detectedEmotion);
+    
+    // Build context from conversation history
+    let memoryContext = "";
+    if (userName) {
+      memoryContext += `\n\nThe user's name is ${userName}. Use their name occasionally (but not every message) to make the conversation more personal.`;
+    }
+    if (conversationContext) {
+      memoryContext += `\n\nContext from earlier in this conversation: ${conversationContext}`;
+    }
+
+    const enhancedSystemPrompt = systemPrompt + memoryContext + emotionalAdjustment;
 
     console.log("Processing chat request with mode:", mode);
+    console.log("Detected emotion:", detectedEmotion);
     console.log("Message count:", messages.length);
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -62,7 +136,7 @@ serve(async (req) => {
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
         messages: [
-          { role: "system", content: systemPrompt },
+          { role: "system", content: enhancedSystemPrompt },
           ...messages,
         ],
         stream: true,
@@ -95,7 +169,11 @@ serve(async (req) => {
     console.log("Streaming response to client");
 
     return new Response(response.body, {
-      headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+      headers: { 
+        ...corsHeaders, 
+        "Content-Type": "text/event-stream",
+        "X-Detected-Emotion": detectedEmotion,
+      },
     });
   } catch (error) {
     console.error("Chat function error:", error);

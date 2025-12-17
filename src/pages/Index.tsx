@@ -1,23 +1,55 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
-import Avatar from "@/components/Avatar";
+import Avatar3D from "@/components/Avatar3D";
 import MicrophoneButton from "@/components/MicrophoneButton";
 import ModeSelector, { ConversationMode } from "@/components/ModeSelector";
 import Subtitles from "@/components/Subtitles";
 import TextInput from "@/components/TextInput";
+import SettingsPanel from "@/components/SettingsPanel";
 import { useChat } from "@/hooks/useChat";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
-import { useSpeechSynthesis } from "@/hooks/useSpeechSynthesis";
+import { useElevenLabsTTS } from "@/hooks/useElevenLabsTTS";
+import { useConversationMemory } from "@/hooks/useConversationMemory";
+import { useSilenceDetection } from "@/hooks/useSilenceDetection";
 import { toast } from "sonner";
 
 const Index = () => {
   const [mode, setMode] = useState<ConversationMode>("friend");
   const [showTextInput, setShowTextInput] = useState(false);
   const [displayText, setDisplayText] = useState("");
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
   
   const { sendMessage, isLoading, currentResponse, clearHistory } = useChat();
   const { isListening, transcript, startListening, stopListening, resetTranscript, isSupported: speechRecognitionSupported } = useSpeechRecognition();
-  const { speak, stop: stopSpeaking, isSpeaking, isSupported: speechSynthesisSupported } = useSpeechSynthesis();
+  const { speak, stop: stopSpeaking, isSpeaking, isLoading: isVoiceLoading } = useElevenLabsTTS();
+  const { userName, setUserName, addMessage, getConversationContext, clearMemory, isLoading: isMemoryLoading } = useConversationMemory();
+
+  // Silence detection - gentle prompt after inactivity
+  const { resetSilenceTimer, stopSilenceTimer, hasPrompted } = useSilenceDetection({
+    silenceThreshold: 20000, // 20 seconds
+    enabled: !isLoading && !isSpeaking && !isListening,
+    onSilence: () => {
+      const silencePrompts = [
+        "Take your time, I'm here.",
+        "No rush — I'm listening whenever you're ready.",
+        "I'm here if you want to talk.",
+      ];
+      const prompt = silencePrompts[Math.floor(Math.random() * silencePrompts.length)];
+      setDisplayText(prompt);
+      if (voiceEnabled) {
+        speak(prompt);
+      }
+    },
+  });
+
+  // Reset silence timer on user activity
+  useEffect(() => {
+    if (isListening || isLoading) {
+      stopSilenceTimer();
+    } else if (!isSpeaking) {
+      resetSilenceTimer();
+    }
+  }, [isListening, isLoading, isSpeaking, resetSilenceTimer, stopSilenceTimer]);
 
   // Update display text when AI is responding
   useEffect(() => {
@@ -37,11 +69,22 @@ const Index = () => {
   const handleSendMessage = async (message: string) => {
     try {
       setDisplayText("");
-      const response = await sendMessage(message, mode);
+      resetSilenceTimer();
+      
+      // Save user message to memory
+      await addMessage({ role: "user", content: message });
+      
+      const response = await sendMessage(message, mode, {
+        userName,
+        conversationContext: getConversationContext(),
+      });
+      
+      // Save assistant response to memory
+      await addMessage({ role: "assistant", content: response });
       
       // Add natural pause before speaking
       setTimeout(() => {
-        if (speechSynthesisSupported) {
+        if (voiceEnabled) {
           speak(response);
         }
       }, 300);
@@ -77,23 +120,60 @@ const Index = () => {
     setDisplayText("");
     stopSpeaking();
     
-    const modeMessages = {
+    const modeMessages: Record<ConversationMode, string> = {
       friend: "Hey! I'm here to chat. What's on your mind?",
       interviewer: "Let's practice! What position would you like to prepare for?",
-      mentor: "I'm here to help you learn and grow. What would you like to explore?"
+      mentor: "I'm here to help you learn and grow. What would you like to explore?",
+      studybuddy: "Ready to study together! What subject are we tackling today?",
+      therapist: "I'm here to listen. Take your time and share whatever feels right.",
     };
     
     setTimeout(() => {
-      const greeting = modeMessages[newMode];
+      let greeting = modeMessages[newMode];
+      if (userName) {
+        greeting = `Hi ${userName}! ${greeting}`;
+      }
       setDisplayText(greeting);
-      if (speechSynthesisSupported) {
+      if (voiceEnabled) {
         speak(greeting);
       }
     }, 500);
-  }, [clearHistory, stopSpeaking, speak, speechSynthesisSupported]);
+  }, [clearHistory, stopSpeaking, speak, voiceEnabled, userName]);
+
+  const handleClearHistory = useCallback(() => {
+    clearHistory();
+    clearMemory();
+    setDisplayText("");
+    stopSpeaking();
+    toast.success("Conversation history cleared");
+  }, [clearHistory, clearMemory, stopSpeaking]);
+
+  if (isMemoryLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <motion.div
+          className="flex flex-col items-center gap-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        >
+          <div className="w-16 h-16 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+          <p className="text-muted-foreground">Loading YourBuddy...</p>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-between py-8 px-4 overflow-hidden">
+      {/* Settings Panel */}
+      <SettingsPanel
+        userName={userName}
+        onUserNameChange={setUserName}
+        voiceEnabled={voiceEnabled}
+        onVoiceEnabledChange={setVoiceEnabled}
+        onClearHistory={handleClearHistory}
+      />
+
       {/* Header */}
       <motion.header
         className="w-full max-w-4xl flex flex-col items-center gap-6"
@@ -103,6 +183,11 @@ const Index = () => {
       >
         <div className="flex items-center gap-3">
           <h1 className="text-3xl font-semibold gradient-text">YourBuddy</h1>
+          {userName && (
+            <span className="text-sm text-muted-foreground">
+              • Hi, {userName}!
+            </span>
+          )}
         </div>
         <ModeSelector currentMode={mode} onModeChange={handleModeChange} />
       </motion.header>
@@ -114,12 +199,12 @@ const Index = () => {
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.6, delay: 0.2 }}
       >
-        <Avatar isSpeaking={isSpeaking} isListening={isListening} />
+        <Avatar3D isSpeaking={isSpeaking} isListening={isListening} />
         
         {/* Subtitles */}
         <div className="min-h-[100px] w-full flex items-center justify-center">
-          <Subtitles text={displayText} isVisible={!!displayText || isLoading} />
-          {isLoading && !displayText && (
+          <Subtitles text={displayText} isVisible={!!displayText || isLoading || isVoiceLoading} />
+          {(isLoading || isVoiceLoading) && !displayText && (
             <motion.div
               className="flex gap-1"
               initial={{ opacity: 0 }}
@@ -152,7 +237,7 @@ const Index = () => {
         <div className="flex items-center gap-4">
           <TextInput
             onSend={handleSendMessage}
-            disabled={isLoading || isSpeaking}
+            disabled={isLoading || isSpeaking || isVoiceLoading}
             isExpanded={showTextInput}
             onToggle={() => setShowTextInput(!showTextInput)}
           />
