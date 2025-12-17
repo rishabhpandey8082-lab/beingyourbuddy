@@ -15,6 +15,27 @@ export const useElevenLabsTTS = (): ElevenLabsTTSHook => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUrlRef = useRef<string | null>(null);
 
+  // Helper function for browser TTS fallback
+  const useBrowserTTS = useCallback((text: string) => {
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.95;
+      utterance.onstart = () => {
+        setIsSpeaking(true);
+        setIsLoading(false);
+      };
+      utterance.onend = () => setIsSpeaking(false);
+      utterance.onerror = () => {
+        setIsSpeaking(false);
+        setIsLoading(false);
+      };
+      window.speechSynthesis.speak(utterance);
+    } else {
+      setIsLoading(false);
+    }
+  }, []);
+
   const speak = useCallback(async (text: string) => {
     if (!text) return;
 
@@ -45,8 +66,15 @@ export const useElevenLabsTTS = (): ElevenLabsTTSHook => {
         }
       );
 
+      // Check if we need to fallback to browser TTS
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        if (errorData.fallback) {
+          // ElevenLabs unavailable, use browser TTS silently
+          console.log("ElevenLabs unavailable, using browser TTS");
+          useBrowserTTS(text);
+          return;
+        }
         throw new Error(errorData.error || `TTS request failed: ${response.status}`);
       }
 
@@ -79,19 +107,12 @@ export const useElevenLabsTTS = (): ElevenLabsTTSHook => {
       await audio.play();
     } catch (err) {
       console.error("ElevenLabs TTS error:", err);
-      setIsLoading(false);
       setError(err instanceof Error ? err.message : "Unknown error");
       
       // Fallback to browser TTS
-      if ("speechSynthesis" in window) {
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 0.95;
-        utterance.onstart = () => setIsSpeaking(true);
-        utterance.onend = () => setIsSpeaking(false);
-        window.speechSynthesis.speak(utterance);
-      }
+      useBrowserTTS(text);
     }
-  }, []);
+  }, [useBrowserTTS]);
 
   const stop = useCallback(() => {
     if (audioRef.current) {
