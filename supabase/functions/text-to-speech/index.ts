@@ -50,7 +50,19 @@ serve(async (req) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error("ElevenLabs API error:", response.status, errorText);
-      throw new Error(`ElevenLabs API error: ${response.status}`);
+      
+      // Return a specific error for rate limiting so client can fallback
+      return new Response(
+        JSON.stringify({ 
+          error: "ElevenLabs unavailable", 
+          fallback: true,
+          text: text // Send text back so client can use browser TTS
+        }),
+        {
+          status: 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     console.log("Successfully generated speech");
