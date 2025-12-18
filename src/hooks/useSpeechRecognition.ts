@@ -57,6 +57,7 @@ export const useSpeechRecognition = (): SpeechRecognitionHook => {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState("");
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const finalTranscriptRef = useRef<string>("");
   
   const isSupported = typeof window !== "undefined" && 
     ("SpeechRecognition" in window || "webkitSpeechRecognition" in window);
@@ -72,24 +73,32 @@ export const useSpeechRecognition = (): SpeechRecognitionHook => {
     recognition.lang = "en-US";
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let finalTranscript = "";
       let interimTranscript = "";
+      let newFinalTranscript = "";
 
-      for (let i = event.resultIndex; i < event.results.length; i++) {
+      // Process all results from the beginning
+      for (let i = 0; i < event.results.length; i++) {
         const result = event.results[i];
+        const text = result[0].transcript;
+        
         if (result.isFinal) {
-          finalTranscript += result[0].transcript;
+          newFinalTranscript += text + " ";
         } else {
-          interimTranscript += result[0].transcript;
+          interimTranscript += text;
         }
       }
 
-      setTranscript((prev) => {
-        if (finalTranscript) {
-          return prev + finalTranscript;
-        }
-        return prev + interimTranscript;
-      });
+      // Store final transcript separately to avoid duplication
+      if (newFinalTranscript) {
+        finalTranscriptRef.current = newFinalTranscript.trim();
+      }
+
+      // Display final + current interim (without duplicating)
+      const displayTranscript = finalTranscriptRef.current + 
+        (finalTranscriptRef.current && interimTranscript ? " " : "") + 
+        interimTranscript;
+      
+      setTranscript(displayTranscript.trim());
     };
 
     recognition.onerror = (event) => {
@@ -115,6 +124,7 @@ export const useSpeechRecognition = (): SpeechRecognitionHook => {
   const startListening = useCallback(() => {
     if (recognitionRef.current && !isListening) {
       setTranscript("");
+      finalTranscriptRef.current = "";
       try {
         recognitionRef.current.start();
       } catch (error) {
@@ -131,6 +141,7 @@ export const useSpeechRecognition = (): SpeechRecognitionHook => {
 
   const resetTranscript = useCallback(() => {
     setTranscript("");
+    finalTranscriptRef.current = "";
   }, []);
 
   return {

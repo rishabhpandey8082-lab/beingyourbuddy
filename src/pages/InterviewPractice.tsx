@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Mic, MicOff, Video, VideoOff, Loader2 } from "lucide-react";
+import { ArrowLeft, Mic, MicOff, Video, VideoOff, Loader2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Avatar3D from "@/components/Avatar3D";
@@ -9,6 +9,7 @@ import Subtitles from "@/components/Subtitles";
 import { useChat } from "@/hooks/useChat";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useElevenLabsTTS } from "@/hooks/useElevenLabsTTS";
+import { useCamera } from "@/hooks/useCamera";
 import { toast } from "sonner";
 
 const interviewTypes = [
@@ -20,15 +21,14 @@ const interviewTypes = [
 
 const InterviewPractice = () => {
   const [interviewType, setInterviewType] = useState("hr");
-  const [customRole, setCustomRole] = useState("");
   const [isStarted, setIsStarted] = useState(false);
-  const [cameraEnabled, setCameraEnabled] = useState(false);
   const [displayText, setDisplayText] = useState("");
   const [status, setStatus] = useState<"idle" | "listening" | "thinking" | "speaking">("idle");
 
   const { sendMessage, isLoading, currentResponse, clearHistory } = useChat();
   const { isListening, transcript, startListening, stopListening, resetTranscript, isSupported } = useSpeechRecognition();
   const { speak, stop: stopSpeaking, isSpeaking, isLoading: isTTSLoading } = useElevenLabsTTS();
+  const { videoRef, isEnabled: cameraEnabled, isLoading: cameraLoading, toggleCamera } = useCamera();
 
   const selectedType = interviewTypes.find((t) => t.id === interviewType);
 
@@ -171,7 +171,7 @@ const InterviewPractice = () => {
         ) : (
           /* Interview screen */
           <motion.div
-            className="w-full max-w-4xl flex flex-col flex-1"
+            className="w-full max-w-5xl flex flex-col flex-1"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
           >
@@ -185,23 +185,68 @@ const InterviewPractice = () => {
               </Button>
             </div>
 
-            {/* Avatar section */}
-            <div className="flex-1 flex flex-col items-center justify-center">
-              <Avatar3D isSpeaking={isSpeaking} isListening={isListening} />
-              
-              {/* Subtitles */}
-              <div className="mt-6 w-full max-w-xl">
-                <Subtitles 
-                  text={displayText} 
-                  isVisible={!!displayText || isLoading} 
-                />
-                {isLoading && !displayText && (
-                  <div className="flex items-center justify-center gap-2 mt-4">
-                    <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                    <span className="text-muted-foreground text-sm">Thinking...</span>
-                  </div>
-                )}
+            {/* Main content - Avatar and Camera side by side */}
+            <div className="flex-1 flex flex-col lg:flex-row items-center justify-center gap-6">
+              {/* AI Avatar section */}
+              <div className="flex flex-col items-center">
+                <Avatar3D isSpeaking={isSpeaking} isListening={isListening} />
+                <p className="text-sm text-muted-foreground mt-2">AI Interviewer</p>
               </div>
+
+              {/* User camera feed */}
+              <AnimatePresence>
+                {cameraEnabled && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    className="relative"
+                  >
+                    <div className="w-48 h-48 lg:w-56 lg:h-56 rounded-2xl overflow-hidden glass border-2 border-primary/30">
+                      <video
+                        ref={videoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        className="w-full h-full object-cover mirror"
+                        style={{ transform: "scaleX(-1)" }}
+                      />
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-2 text-center">You</p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Camera placeholder when disabled */}
+              {!cameraEnabled && (
+                <div className="w-48 h-48 lg:w-56 lg:h-56 rounded-2xl glass border-2 border-border/30 flex flex-col items-center justify-center">
+                  <User className="w-12 h-12 text-muted-foreground/50 mb-2" />
+                  <p className="text-sm text-muted-foreground">Camera Off</p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="mt-2"
+                    onClick={toggleCamera}
+                    disabled={cameraLoading}
+                  >
+                    {cameraLoading ? "Starting..." : "Enable Camera"}
+                  </Button>
+                </div>
+              )}
+            </div>
+            
+            {/* Subtitles */}
+            <div className="mt-6 w-full max-w-xl mx-auto">
+              <Subtitles 
+                text={displayText} 
+                isVisible={!!displayText || isLoading} 
+              />
+              {isLoading && !displayText && (
+                <div className="flex items-center justify-center gap-2 mt-4">
+                  <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                  <span className="text-muted-foreground text-sm">Thinking...</span>
+                </div>
+              )}
             </div>
 
             {/* Controls */}
@@ -225,10 +270,17 @@ const InterviewPractice = () => {
                 <Button
                   variant="outline"
                   size="icon"
-                  className="w-14 h-14 rounded-full"
-                  onClick={() => setCameraEnabled(!cameraEnabled)}
+                  className={`w-14 h-14 rounded-full ${cameraEnabled ? "bg-primary/20 border-primary" : ""}`}
+                  onClick={toggleCamera}
+                  disabled={cameraLoading}
                 >
-                  {cameraEnabled ? <Video className="w-6 h-6" /> : <VideoOff className="w-6 h-6" />}
+                  {cameraLoading ? (
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                  ) : cameraEnabled ? (
+                    <Video className="w-6 h-6" />
+                  ) : (
+                    <VideoOff className="w-6 h-6" />
+                  )}
                 </Button>
 
                 {/* Main mic button */}

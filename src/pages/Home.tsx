@@ -1,8 +1,11 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Search, Languages, Briefcase, User, LogOut } from "lucide-react";
+import { Search, Languages, Briefcase, User, LogOut, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
+import ConversationHistory from "@/components/ConversationHistory";
+import { toast } from "sonner";
 
 const features = [
   {
@@ -33,13 +36,39 @@ const features = [
 
 const Home = () => {
   const { user, signOut } = useAuth();
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  const handleSelectConversation = (conversationId: string, messages: any[]) => {
+    // For now, just show a toast - this would navigate to a chat view
+    toast.success(`Loaded conversation with ${messages.length} messages`);
+    // In a full implementation, you'd navigate to a chat view with the messages
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
+      {/* Conversation History Panel */}
+      <ConversationHistory
+        isOpen={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        onSelectConversation={handleSelectConversation}
+      />
+
       {/* Header */}
       <header className="w-full p-4 flex justify-between items-center">
-        <h1 className="text-2xl font-semibold gradient-text">YourBuddy</h1>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-semibold gradient-text">YourBuddy</h1>
+        </div>
+        <div className="flex items-center gap-2">
+          {user && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setHistoryOpen(true)}
+              title="Chat History"
+            >
+              <History className="w-5 h-5" />
+            </Button>
+          )}
           {user ? (
             <>
               <span className="text-sm text-muted-foreground hidden sm:inline">
