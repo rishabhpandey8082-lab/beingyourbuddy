@@ -1,20 +1,24 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Mic, MicOff, Volume2, VolumeX, ArrowLeft, Send, Loader2 } from "lucide-react";
+import { Search, Mic, MicOff, Volume2, VolumeX, ArrowLeft, Send, Loader2, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useChat } from "@/hooks/useChat";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useElevenLabsTTS } from "@/hooks/useElevenLabsTTS";
+import { useAuth } from "@/contexts/AuthContext";
+import ConversationHistory from "@/components/ConversationHistory";
 import { toast } from "sonner";
 
 const AISearch = () => {
   const [query, setQuery] = useState("");
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [results, setResults] = useState<{ query: string; response: string }[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const resultsEndRef = useRef<HTMLDivElement>(null);
 
+  const { user } = useAuth();
   const { sendMessage, isLoading, currentResponse } = useChat();
   const { isListening, transcript, startListening, stopListening, resetTranscript, isSupported } = useSpeechRecognition();
   const { speak, stop: stopSpeaking, isSpeaking } = useElevenLabsTTS();
@@ -58,6 +62,22 @@ const AISearch = () => {
     handleSearch(query);
   };
 
+  const handleSelectConversation = (conversationId: string, messages: any[]) => {
+    // Load the conversation messages into results
+    const loadedResults = messages.reduce((acc: { query: string; response: string }[], msg, index, arr) => {
+      if (msg.role === "user" && arr[index + 1]?.role === "assistant") {
+        acc.push({
+          query: msg.content,
+          response: arr[index + 1].content,
+        });
+      }
+      return acc;
+    }, []);
+    
+    setResults(loadedResults);
+    toast.success("Conversation loaded");
+  };
+
   const toggleVoiceInput = useCallback(() => {
     if (!isSupported) {
       toast.error("Voice input not supported in your browser");
@@ -73,6 +93,13 @@ const AISearch = () => {
 
   return (
     <div className="min-h-screen flex flex-col">
+      {/* Conversation History Panel */}
+      <ConversationHistory
+        isOpen={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        onSelectConversation={handleSelectConversation}
+      />
+
       {/* Header */}
       <header className="w-full p-4 flex justify-between items-center border-b border-border/50">
         <Link to="/">
@@ -82,14 +109,26 @@ const AISearch = () => {
           </Button>
         </Link>
         <h1 className="text-xl font-semibold gradient-text">AI Search</h1>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setVoiceEnabled(!voiceEnabled)}
-          className={voiceEnabled ? "text-primary" : "text-muted-foreground"}
-        >
-          {voiceEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
-        </Button>
+        <div className="flex items-center gap-1">
+          {user && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setHistoryOpen(true)}
+              title="Chat History"
+            >
+              <History className="w-5 h-5" />
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setVoiceEnabled(!voiceEnabled)}
+            className={voiceEnabled ? "text-primary" : "text-muted-foreground"}
+          >
+            {voiceEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+          </Button>
+        </div>
       </header>
 
       {/* Main content */}
