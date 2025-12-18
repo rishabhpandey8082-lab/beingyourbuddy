@@ -33,21 +33,34 @@ const getSessionId = (): string => {
 export const useConversationMemory = (): ConversationMemory => {
   const [sessionId] = useState(getSessionId);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [userName, setUserNameState] = useState<string | null>(() => {
     return localStorage.getItem("yourbuddy_user_name");
   });
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load existing conversation on mount
+  // Get current user and load conversation on mount
   useEffect(() => {
     const loadConversation = async () => {
       try {
-        // Try to find existing conversation for this session
+        // Get current authenticated user
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (!user) {
+          console.log("No authenticated user, skipping conversation load");
+          setIsLoading(false);
+          return;
+        }
+
+        setUserId(user.id);
+
+        // Try to find existing conversation for this user and session
         const { data: existingConv } = await supabase
           .from("conversations")
           .select("id, user_name")
           .eq("session_id", sessionId)
+          .eq("user_id", user.id)
           .order("created_at", { ascending: false })
           .limit(1)
           .single();
@@ -76,10 +89,14 @@ export const useConversationMemory = (): ConversationMemory => {
             );
           }
         } else {
-          // Create new conversation
+          // Create new conversation with user_id
           const { data: newConv } = await supabase
             .from("conversations")
-            .insert({ session_id: sessionId, user_name: userName })
+            .insert({ 
+              session_id: sessionId, 
+              user_name: userName,
+              user_id: user.id 
+            })
             .select("id")
             .single();
 
@@ -159,17 +176,26 @@ export const useConversationMemory = (): ConversationMemory => {
   const clearMemory = useCallback(async () => {
     setMessages([]);
     
-    // Create a new conversation
+    if (!userId) {
+      console.log("No user ID, cannot create conversation");
+      return;
+    }
+
+    // Create a new conversation with user_id
     const { data: newConv } = await supabase
       .from("conversations")
-      .insert({ session_id: sessionId, user_name: userName })
+      .insert({ 
+        session_id: sessionId, 
+        user_name: userName,
+        user_id: userId 
+      })
       .select("id")
       .single();
 
     if (newConv) {
       setConversationId(newConv.id);
     }
-  }, [sessionId, userName]);
+  }, [sessionId, userName, userId]);
 
   return {
     sessionId,
