@@ -125,7 +125,67 @@ serve(async (req) => {
 
     console.log("Authenticated user:", user.id);
 
-    const { messages, mode = "friend", userName, conversationContext } = await req.json();
+    const body = await req.json();
+    const { messages, mode = "friend", userName, conversationContext } = body;
+
+    // Input validation
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return new Response(JSON.stringify({ error: "Messages must be a non-empty array" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (messages.length > 100) {
+      return new Response(JSON.stringify({ error: "Too many messages (max 100)" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    for (const msg of messages) {
+      if (!msg.content || typeof msg.content !== "string") {
+        return new Response(JSON.stringify({ error: "Invalid message format" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (msg.content.length > 10000) {
+        return new Response(JSON.stringify({ error: "Message too long (max 10000 chars)" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (msg.role && !["user", "assistant", "system"].includes(msg.role)) {
+        return new Response(JSON.stringify({ error: "Invalid message role" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    if (userName && (typeof userName !== "string" || userName.length > 100)) {
+      return new Response(JSON.stringify({ error: "Invalid userName (max 100 chars)" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (conversationContext && (typeof conversationContext !== "string" || conversationContext.length > 1000)) {
+      return new Response(JSON.stringify({ error: "Invalid conversationContext (max 1000 chars)" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const validModes = ["friend", "interviewer", "mentor", "studybuddy", "therapist", "language"];
+    if (mode && !validModes.includes(mode)) {
+      return new Response(JSON.stringify({ error: "Invalid mode" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     
     if (!LOVABLE_API_KEY) {

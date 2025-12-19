@@ -39,16 +39,36 @@ serve(async (req) => {
 
     console.log("Authenticated user:", user.id);
 
-    const { text, voiceId = "EXAVITQu4vr4xnSDxMaL" } = await req.json();
+    const body = await req.json();
+    const { text, voiceId = "EXAVITQu4vr4xnSDxMaL" } = body;
+
+    // Input validation
+    if (!text || typeof text !== "string") {
+      return new Response(JSON.stringify({ error: "Text is required and must be a string" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (text.length > 5000) {
+      return new Response(JSON.stringify({ error: "Text too long (max 5000 chars)" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (voiceId && (typeof voiceId !== "string" || voiceId.length > 50)) {
+      return new Response(JSON.stringify({ error: "Invalid voiceId" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY");
 
     if (!ELEVENLABS_API_KEY) {
       console.error("ELEVENLABS_API_KEY is not configured");
       throw new Error("ElevenLabs API key not configured");
-    }
-
-    if (!text) {
-      throw new Error("Text is required");
     }
 
     console.log("Generating speech for text length:", text.length);
