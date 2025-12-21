@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 type Message = { role: "user" | "assistant"; content: string };
 type ConversationMode = "friend" | "interviewer" | "mentor" | "studybuddy" | "therapist";
@@ -26,11 +27,18 @@ export const useChat = () => {
       let fullResponse = "";
 
       try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const accessToken = session?.access_token;
+        if (!accessToken) {
+          throw new Error("Please sign in to use AI features.");
+        }
+
         const response = await fetch(CHAT_URL, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            Authorization: `Bearer ${accessToken}`,
           },
           body: JSON.stringify({ 
             messages: updatedMessages, 
