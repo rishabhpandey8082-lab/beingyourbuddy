@@ -4,9 +4,10 @@ import { Mic, Loader2, Volume2, Circle } from "lucide-react";
 interface StatusIndicatorProps {
   status: "idle" | "listening" | "thinking" | "speaking";
   compact?: boolean;
+  className?: string;
 }
 
-const StatusIndicator = ({ status, compact = false }: StatusIndicatorProps) => {
+const StatusIndicator = ({ status, compact = false, className = "" }: StatusIndicatorProps) => {
   const getStatusConfig = () => {
     switch (status) {
       case "listening":
@@ -68,7 +69,7 @@ const StatusIndicator = ({ status, compact = false }: StatusIndicatorProps) => {
       key={status}
       initial={{ opacity: 0, y: -5 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border ${config.bgClass} ${config.colorClass}`}
+      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border ${config.bgClass} ${config.colorClass} ${className}`}
     >
       <Icon className={`w-4 h-4 ${config.spin ? "animate-spin" : ""} ${config.pulse ? "animate-pulse" : ""}`} />
       <span className="text-sm font-medium">{config.text}</span>
