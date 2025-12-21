@@ -6,12 +6,15 @@ interface ChatMessageProps {
   role: "user" | "assistant";
   content: string;
   isTyping?: boolean;
+  isStreaming?: boolean;
+  timestamp?: Date;
   onSpeak?: () => void;
   showSpeakButton?: boolean;
 }
 
-const ChatMessage = ({ role, content, isTyping, onSpeak, showSpeakButton }: ChatMessageProps) => {
+const ChatMessage = ({ role, content, isTyping, isStreaming, onSpeak, showSpeakButton = true }: ChatMessageProps) => {
   const isUser = role === "user";
+  const showTyping = isTyping || isStreaming;
 
   return (
     <motion.div
@@ -38,26 +41,19 @@ const ChatMessage = ({ role, content, isTyping, onSpeak, showSpeakButton }: Chat
             : "chat-bubble-ai"
         }`}
       >
-        {isTyping ? (
-          <div className="flex items-center gap-1 py-1">
-            <span className="w-2 h-2 rounded-full bg-current animate-pulse" style={{ animationDelay: "0ms" }} />
-            <span className="w-2 h-2 rounded-full bg-current animate-pulse" style={{ animationDelay: "150ms" }} />
-            <span className="w-2 h-2 rounded-full bg-current animate-pulse" style={{ animationDelay: "300ms" }} />
-          </div>
-        ) : (
-          <>
-            <p className="whitespace-pre-wrap text-sm leading-relaxed">{content}</p>
-            {!isUser && showSpeakButton && onSpeak && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute -right-10 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity w-8 h-8"
-                onClick={onSpeak}
-              >
-                <Volume2 className="w-4 h-4" />
-              </Button>
-            )}
-          </>
+        <p className="whitespace-pre-wrap text-sm leading-relaxed">
+          {content}
+          {isStreaming && <span className="inline-block w-1.5 h-4 bg-primary animate-pulse ml-0.5 align-middle" />}
+        </p>
+        {!isUser && showSpeakButton && onSpeak && !isStreaming && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute -right-10 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity w-8 h-8"
+            onClick={onSpeak}
+          >
+            <Volume2 className="w-4 h-4" />
+          </Button>
         )}
       </div>
     </motion.div>

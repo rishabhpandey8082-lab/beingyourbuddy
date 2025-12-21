@@ -4,9 +4,10 @@ interface WaveformVisualizerProps {
   isActive: boolean;
   variant?: "bars" | "dots" | "wave";
   color?: "primary" | "destructive" | "muted";
+  className?: string;
 }
 
-const WaveformVisualizer = ({ isActive, variant = "bars", color = "primary" }: WaveformVisualizerProps) => {
+const WaveformVisualizer = ({ isActive, variant = "bars", color = "primary", className = "" }: WaveformVisualizerProps) => {
   const colorClasses = {
     primary: "bg-primary",
     destructive: "bg-destructive",
@@ -15,7 +16,7 @@ const WaveformVisualizer = ({ isActive, variant = "bars", color = "primary" }: W
 
   if (variant === "bars") {
     return (
-      <div className="flex items-center justify-center gap-1 h-8">
+      <div className={`flex items-center justify-center gap-1 h-8 ${className}`}>
         {[...Array(5)].map((_, i) => (
           <motion.div
             key={i}
