@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ElevenLabsTTSHook {
   speak: (text: string) => Promise<void>;
@@ -53,6 +54,15 @@ export const useElevenLabsTTS = (): ElevenLabsTTSHook => {
     }
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+
+      // If not signed in, gracefully fallback to browser TTS (keeps app usable)
+      if (!accessToken) {
+        useBrowserTTS(text);
+        return;
+      }
+
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/text-to-speech`,
         {
@@ -60,7 +70,7 @@ export const useElevenLabsTTS = (): ElevenLabsTTSHook => {
           headers: {
             "Content-Type": "application/json",
             apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            Authorization: `Bearer ${accessToken}`,
           },
           body: JSON.stringify({ text }),
         }
