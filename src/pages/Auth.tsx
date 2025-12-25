@@ -93,8 +93,10 @@ const Auth = () => {
   };
 
   const continueAsGuest = () => {
+    // Store guest mode flag in sessionStorage for UI indication
+    sessionStorage.setItem("guest_mode", "true");
     navigate("/");
-    toast.info("Continuing as guest. Sign in to save your conversations.");
+    toast.info("Continuing as guest (demo mode). Sign in to access all features and save conversations.");
   };
 
   // Show loading while checking auth state

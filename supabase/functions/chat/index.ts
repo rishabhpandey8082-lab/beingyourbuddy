@@ -1,10 +1,32 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+// Dynamic CORS configuration - restrict origins in production
+const getAllowedOrigin = (requestOrigin: string | null): string => {
+  const allowedOrigins = [
+    Deno.env.get("ALLOWED_ORIGIN") || "",
+    "https://lovable.dev",
+    "https://gptengineer.app",
+  ].filter(Boolean);
+  
+  // In production, validate against allowed origins list
+  if (requestOrigin && allowedOrigins.some(allowed => requestOrigin.startsWith(allowed.replace(/\/$/, '')))) {
+    return requestOrigin;
+  }
+  
+  // Fallback for development - if ALLOWED_ORIGIN not set, use request origin
+  if (!Deno.env.get("ALLOWED_ORIGIN") && requestOrigin) {
+    return requestOrigin;
+  }
+  
+  return allowedOrigins[0] || "*";
 };
+
+const getCorsHeaders = (req: Request) => ({
+  "Access-Control-Allow-Origin": getAllowedOrigin(req.headers.get("Origin")),
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Credentials": "true",
+});
 
 const modePrompts = {
   friend: `You are YourBuddy, a warm, supportive, and non-judgmental friend. You speak casually and naturally, like a close friend would. You:
@@ -93,6 +115,8 @@ function getEmotionalAdjustment(emotion: string): string {
 }
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+  
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -101,7 +125,7 @@ serve(async (req) => {
     // Authenticate the user
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      console.error("No authorization header provided");
+      console.log("Auth: Missing authorization header");
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -116,14 +140,16 @@ serve(async (req) => {
 
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
     if (authError || !user) {
-      console.error("Authentication failed:", authError?.message);
+      console.log("Auth: Authentication failed");
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    console.log("Authenticated user:", user.id);
+    // Log request ID for correlation (not user ID for privacy)
+    const requestId = crypto.randomUUID().slice(0, 8);
+    console.log(`[${requestId}] Processing chat request`);
 
     const body = await req.json();
     const { messages, mode = "friend", userName, conversationContext } = body;
@@ -189,8 +215,8 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     
     if (!LOVABLE_API_KEY) {
-      console.error("LOVABLE_API_KEY is not configured");
-      throw new Error("LOVABLE_API_KEY is not configured");
+      console.error(`[${requestId}] Configuration error: API key missing`);
+      throw new Error("Service configuration error");
     }
 
     const systemPrompt = modePrompts[mode as keyof typeof modePrompts] || modePrompts.friend;
@@ -211,9 +237,7 @@ serve(async (req) => {
 
     const enhancedSystemPrompt = systemPrompt + memoryContext + emotionalAdjustment;
 
-    console.log("Processing chat request with mode:", mode);
-    console.log("Detected emotion:", detectedEmotion);
-    console.log("Message count:", messages.length);
+    console.log(`[${requestId}] Mode: ${mode}, Messages: ${messages.length}`);
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -232,8 +256,7 @@ serve(async (req) => {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
+      console.error(`[${requestId}] AI gateway error: ${response.status}`);
       
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }), {
@@ -254,7 +277,7 @@ serve(async (req) => {
       });
     }
 
-    console.log("Streaming response to client");
+    console.log(`[${requestId}] Streaming response`);
 
     return new Response(response.body, {
       headers: { 
@@ -264,10 +287,10 @@ serve(async (req) => {
       },
     });
   } catch (error) {
-    console.error("Chat function error:", error);
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }), {
+    console.error("Chat function error:", error instanceof Error ? error.message : "Unknown");
+    return new Response(JSON.stringify({ error: "Service temporarily unavailable" }), {
       status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });
   }
 });

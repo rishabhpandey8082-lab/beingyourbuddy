@@ -1,21 +1,46 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+// Dynamic CORS configuration - restrict origins in production
+const getAllowedOrigin = (requestOrigin: string | null): string => {
+  const allowedOrigins = [
+    Deno.env.get("ALLOWED_ORIGIN") || "",
+    "https://lovable.dev",
+    "https://gptengineer.app",
+  ].filter(Boolean);
+  
+  if (requestOrigin && allowedOrigins.some(allowed => requestOrigin.startsWith(allowed.replace(/\/$/, '')))) {
+    return requestOrigin;
+  }
+  
+  if (!Deno.env.get("ALLOWED_ORIGIN") && requestOrigin) {
+    return requestOrigin;
+  }
+  
+  return allowedOrigins[0] || "*";
 };
 
+const getCorsHeaders = (req: Request) => ({
+  "Access-Control-Allow-Origin": getAllowedOrigin(req.headers.get("Origin")),
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Credentials": "true",
+});
+
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+  
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  // Generate request ID for log correlation (no PII)
+  const requestId = crypto.randomUUID().slice(0, 8);
 
   try {
     // Authenticate the user
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      console.error("No authorization header provided");
+      console.log(`[${requestId}] Auth: Missing authorization header`);
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -30,14 +55,14 @@ serve(async (req) => {
 
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
     if (authError || !user) {
-      console.error("Authentication failed:", authError?.message);
+      console.log(`[${requestId}] Auth: Authentication failed`);
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    console.log("Authenticated user:", user.id);
+    console.log(`[${requestId}] Processing TTS request`);
 
     const body = await req.json();
     const { text, voiceId = "EXAVITQu4vr4xnSDxMaL" } = body;
@@ -67,11 +92,11 @@ serve(async (req) => {
     const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY");
 
     if (!ELEVENLABS_API_KEY) {
-      console.error("ELEVENLABS_API_KEY is not configured");
-      throw new Error("ElevenLabs API key not configured");
+      console.error(`[${requestId}] Configuration error: API key missing`);
+      throw new Error("Service configuration error");
     }
 
-    console.log("Generating speech for text length:", text.length);
+    console.log(`[${requestId}] Generating speech, length: ${text.length}`);
 
     const response = await fetch(
       `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`,
@@ -96,13 +121,12 @@ serve(async (req) => {
     );
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("ElevenLabs API error:", response.status, errorText);
+      console.error(`[${requestId}] External API error: ${response.status}`);
       
       // Return a specific error for rate limiting so client can fallback
       return new Response(
         JSON.stringify({ 
-          error: "ElevenLabs unavailable", 
+          error: "Speech service unavailable", 
           fallback: true,
           text: text // Send text back so client can use browser TTS
         }),
@@ -113,7 +137,7 @@ serve(async (req) => {
       );
     }
 
-    console.log("Successfully generated speech");
+    console.log(`[${requestId}] Speech generated successfully`);
 
     return new Response(response.body, {
       headers: {
@@ -123,12 +147,12 @@ serve(async (req) => {
       },
     });
   } catch (error) {
-    console.error("TTS function error:", error);
+    console.error(`[${requestId}] TTS error:`, error instanceof Error ? error.message : "Unknown");
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
+      JSON.stringify({ error: "Service temporarily unavailable" }),
       {
         status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       }
     );
   }
