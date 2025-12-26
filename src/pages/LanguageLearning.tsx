@@ -1,11 +1,12 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Globe, RefreshCw, Trophy, Flame, Target, BookOpen, Sparkles } from "lucide-react";
+import { ArrowLeft, Globe, RefreshCw, Trophy, Flame, Target, BookOpen, Sparkles, Mic, Volume2, CheckCircle2, XCircle, Star, Zap, Heart, Award } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
 import { useChat } from "@/hooks/useChat";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useElevenLabsTTS } from "@/hooks/useElevenLabsTTS";
@@ -30,17 +31,45 @@ const languages = [
 ];
 
 const levels = [
-  { id: "beginner", name: "Beginner", description: "Just starting out", xp: 0 },
-  { id: "intermediate", name: "Intermediate", description: "Building fluency", xp: 100 },
-  { id: "advanced", name: "Advanced", description: "Near native", xp: 500 },
+  { id: "beginner", name: "Beginner", description: "Just starting out", xp: 0, icon: "🌱" },
+  { id: "intermediate", name: "Intermediate", description: "Building fluency", xp: 100, icon: "🌿" },
+  { id: "advanced", name: "Advanced", description: "Near native", xp: 500, icon: "🌳" },
 ];
+
+type ActivityType = "fill_blank" | "choose_option" | "translate" | "yes_no" | "type_sentence" | "speaking";
+
+interface Activity {
+  type: ActivityType;
+  instruction: string;
+  content: string;
+  options?: string[];
+  correctAnswer?: string;
+  isSpeaking?: boolean;
+}
 
 interface Message {
   id: string;
   role: "user" | "ai";
   text: string;
-  correction?: string;
+  isCorrect?: boolean;
+  feedback?: string;
 }
+
+const encouragements = [
+  "Great job! 🎉",
+  "You're doing amazing! ⭐",
+  "Keep it up! 💪",
+  "Excellent work! 🌟",
+  "Perfect! You nailed it! 🏆",
+  "Wonderful! 👏",
+];
+
+const corrections = [
+  "Small mistake, no problem! Let's try again.",
+  "Almost there! Here's a hint...",
+  "Good effort! The correct answer is...",
+  "Don't worry! Learning takes practice.",
+];
 
 const LanguageLearning = () => {
   const [language, setLanguage] = useState("de");
@@ -50,6 +79,14 @@ const LanguageLearning = () => {
   const [status, setStatus] = useState<"idle" | "listening" | "thinking" | "speaking">("idle");
   const [streak, setStreak] = useState(3);
   const [sessionXP, setSessionXP] = useState(0);
+  const [hearts, setHearts] = useState(5);
+  const [lessonProgress, setLessonProgress] = useState(0);
+  const [currentActivity, setCurrentActivity] = useState<Activity | null>(null);
+  const [userAnswer, setUserAnswer] = useState("");
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [isCorrectAnswer, setIsCorrectAnswer] = useState(false);
+  const [activityCount, setActivityCount] = useState(0);
+  const [isSpeakingMode, setIsSpeakingMode] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { sendMessage, isLoading, currentResponse, clearHistory } = useChat();
@@ -74,75 +111,195 @@ const LanguageLearning = () => {
     else setStatus("idle");
   }, [isListening, isLoading, isSpeaking, isTTSLoading]);
 
-  // Handle voice input completion
+  // Handle voice input completion for speaking activities
   useEffect(() => {
-    if (!isListening && transcript.trim() && isStarted) {
-      handleUserSpeech(transcript.trim());
+    if (!isListening && transcript.trim() && isStarted && isSpeakingMode) {
+      handleSpeakingAnswer(transcript.trim());
       resetTranscript();
     }
-  }, [isListening, isStarted]);
+  }, [isListening, isStarted, isSpeakingMode]);
 
   const startSession = async () => {
     clearHistory();
     setConversation([]);
     setSessionXP(0);
+    setHearts(5);
+    setLessonProgress(0);
+    setActivityCount(0);
     setIsStarted(true);
+    setIsSpeakingMode(false);
 
-    const greetings: Record<string, string> = {
-      en: "Hello! How are you today?",
-      es: "¡Hola! ¿Cómo estás hoy?",
-      fr: "Bonjour ! Comment allez-vous aujourd'hui ?",
-      de: "Hallo! Wie geht es dir heute?",
-      it: "Ciao! Come stai oggi?",
-      pt: "Olá! Como você está hoje?",
-      ja: "こんにちは！今日はお元気ですか？",
-      ko: "안녕하세요! 오늘 기분이 어떠세요?",
-      zh: "你好！今天过得怎么样？",
-      ar: "مرحبا! كيف حالك اليوم؟",
-      hi: "नमस्ते! आज आप कैसे हैं?",
-      ru: "Привет! Как у тебя дела сегодня?",
-    };
-
-    const greeting = `${greetings[language] || greetings.en}\n\n(Hello! How are you today?)\n\nI'm your ${selectedLanguage?.name} conversation partner! Speak naturally and I'll help you improve. Don't worry about mistakes — that's how we learn! 🌟`;
+    const greeting = `🎉 Welcome to your ${selectedLanguage?.name} lesson!\n\nI'm your Duolingo-style language coach. We'll learn step-by-step with fun activities!\n\nLet's start with something simple. Ready? 💪`;
 
     setConversation([{ id: crypto.randomUUID(), role: "ai", text: greeting }]);
     speak(greeting);
+    
+    // Generate first activity after greeting
+    setTimeout(() => generateNextActivity(), 2000);
   };
 
-  const handleUserSpeech = async (userText: string) => {
-    setConversation((prev) => [...prev, { id: crypto.randomUUID(), role: "user", text: userText }]);
-    setSessionXP((prev) => prev + 10);
+  const generateNextActivity = async () => {
+    setShowFeedback(false);
+    setUserAnswer("");
+    setCurrentActivity(null);
+    
+    const activityTypes: ActivityType[] = ["fill_blank", "choose_option", "translate", "yes_no", "type_sentence", "speaking"];
+    const randomType = activityTypes[Math.floor(Math.random() * activityTypes.length)];
+    
+    // Activate speaking mode more frequently
+    const shouldSpeak = randomType === "speaking" || (activityCount > 0 && activityCount % 3 === 0);
+    setIsSpeakingMode(shouldSpeak);
+
+    const systemPrompt = `You are a Duolingo-style ${selectedLanguage?.name} language tutor for ${level} level.
+
+Generate ONE simple activity. Return ONLY valid JSON in this exact format:
+{
+  "type": "${randomType}",
+  "instruction": "Brief instruction in English",
+  "content": "The question or prompt",
+  "options": ["option1", "option2", "option3"] (only for choose_option or fill_blank),
+  "correctAnswer": "The correct answer"
+}
+
+Rules:
+- Keep it SHORT and simple for ${level} level
+- Use common vocabulary
+- For fill_blank: Use ___ for the blank
+- For speaking: Ask user to repeat a simple phrase
+- For translate: Give a simple sentence to translate
+- For yes_no: Ask if a sentence is correct
+- Make it fun and engaging
+
+Language: ${selectedLanguage?.name}`;
 
     try {
-      const systemContext = `You are a warm, encouraging ${selectedLanguage?.name} language partner for ${level} level learners.
-
-Your style:
-- Be like a supportive friend, not a strict teacher
-- Keep responses short (2-3 sentences for ${level} level)
-- Always respond in ${selectedLanguage?.name} first, then provide translation in parentheses
-
-For each response:
-1. Reply naturally to what they said
-2. If there are mistakes, mention them kindly like: "Great effort! A more natural way to say that would be..."
-3. Ask a follow-up question to keep the conversation going
-
-Level adjustments (${level}):
-${level === "beginner" ? "- Use simple vocabulary\n- Speak slowly\n- Give lots of praise" : ""}
-${level === "intermediate" ? "- Mix simple and complex sentences\n- Introduce new vocabulary gently" : ""}
-${level === "advanced" ? "- Use natural, fluent speech\n- Include idioms and cultural nuances" : ""}
-
-Make them feel confident and excited to keep speaking!`;
-
-      const response = await sendMessage(userText, "studybuddy", {
-        conversationContext: systemContext,
+      const response = await sendMessage(`Generate a ${randomType} activity for ${selectedLanguage?.name} ${level} level`, "studybuddy", {
+        conversationContext: systemPrompt,
       });
 
-      setConversation((prev) => [...prev, { id: crypto.randomUUID(), role: "ai", text: response }]);
-      setSessionXP((prev) => prev + 15);
-      speak(response);
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const activity = JSON.parse(jsonMatch[0]) as Activity;
+        activity.isSpeaking = shouldSpeak;
+        setCurrentActivity(activity);
+        
+        const activityMessage = formatActivityMessage(activity, shouldSpeak);
+        setConversation(prev => [...prev, { id: crypto.randomUUID(), role: "ai", text: activityMessage }]);
+        speak(activity.instruction + ". " + activity.content);
+      }
     } catch (error) {
-      toast.error("Something went wrong. Please try again.");
+      console.error("Activity generation error:", error);
+      // Fallback activity
+      const fallback: Activity = {
+        type: "translate",
+        instruction: "Translate this sentence",
+        content: selectedLanguage?.code === "de" ? "Guten Tag" : "Hello",
+        correctAnswer: selectedLanguage?.code === "de" ? "Good day" : "Hola",
+        isSpeaking: shouldSpeak
+      };
+      setCurrentActivity(fallback);
+      setConversation(prev => [...prev, { id: crypto.randomUUID(), role: "ai", text: formatActivityMessage(fallback, shouldSpeak) }]);
     }
+  };
+
+  const formatActivityMessage = (activity: Activity, isSpeaking: boolean): string => {
+    let message = "";
+    
+    const activityIcons: Record<ActivityType, string> = {
+      fill_blank: "✏️",
+      choose_option: "🔘",
+      translate: "🔄",
+      yes_no: "❓",
+      type_sentence: "⌨️",
+      speaking: "🎤"
+    };
+
+    message += `${activityIcons[activity.type]} **${activity.instruction}**\n\n`;
+    message += `${activity.content}\n\n`;
+    
+    if (activity.options && activity.options.length > 0) {
+      message += activity.options.map((opt, i) => `${String.fromCharCode(65 + i)}) ${opt}`).join("\n");
+      message += "\n\n";
+    }
+
+    if (isSpeaking) {
+      message += "🎤 **Please speak your answer!**";
+    } else if (activity.type === "type_sentence") {
+      message += "⌨️ Type your answer below";
+    }
+
+    return message;
+  };
+
+  const checkAnswer = async (answer: string) => {
+    if (!currentActivity) return;
+
+    setShowFeedback(true);
+    const normalizedAnswer = answer.toLowerCase().trim();
+    const normalizedCorrect = currentActivity.correctAnswer?.toLowerCase().trim() || "";
+    
+    // Flexible matching
+    const isCorrect = normalizedAnswer === normalizedCorrect || 
+                      normalizedCorrect.includes(normalizedAnswer) ||
+                      normalizedAnswer.includes(normalizedCorrect) ||
+                      (currentActivity.options && 
+                       currentActivity.options.some(opt => 
+                         opt.toLowerCase().includes(normalizedAnswer) && 
+                         opt.toLowerCase() === normalizedCorrect));
+
+    setIsCorrectAnswer(isCorrect);
+    
+    if (isCorrect) {
+      const xpGain = isSpeakingMode ? 20 : 15;
+      setSessionXP(prev => prev + xpGain);
+      setLessonProgress(prev => Math.min(prev + 15, 100));
+      setActivityCount(prev => prev + 1);
+      
+      const encouragement = encouragements[Math.floor(Math.random() * encouragements.length)];
+      const feedbackMsg = `${encouragement}\n\n+${xpGain} XP 🌟`;
+      
+      setConversation(prev => [...prev, 
+        { id: crypto.randomUUID(), role: "user", text: answer },
+        { id: crypto.randomUUID(), role: "ai", text: feedbackMsg, isCorrect: true }
+      ]);
+      speak(encouragement);
+    } else {
+      setHearts(prev => Math.max(prev - 1, 0));
+      const correction = corrections[Math.floor(Math.random() * corrections.length)];
+      const feedbackMsg = `${correction}\n\nThe correct answer was: **${currentActivity.correctAnswer}**`;
+      
+      setConversation(prev => [...prev, 
+        { id: crypto.randomUUID(), role: "user", text: answer },
+        { id: crypto.randomUUID(), role: "ai", text: feedbackMsg, isCorrect: false }
+      ]);
+      speak(correction);
+    }
+
+    // Continue to next activity after delay
+    setTimeout(() => {
+      if (lessonProgress >= 100 || activityCount >= 6) {
+        endSession();
+      } else {
+        generateNextActivity();
+      }
+    }, 2500);
+  };
+
+  const handleSpeakingAnswer = (spokenText: string) => {
+    setUserAnswer(spokenText);
+    checkAnswer(spokenText);
+    setIsSpeakingMode(false);
+  };
+
+  const handleTextSubmit = () => {
+    if (userAnswer.trim()) {
+      checkAnswer(userAnswer.trim());
+    }
+  };
+
+  const handleOptionSelect = (option: string) => {
+    setUserAnswer(option);
+    checkAnswer(option);
   };
 
   const toggleListening = useCallback(() => {
@@ -169,9 +326,17 @@ Make them feel confident and excited to keep speaking!`;
     stopSpeaking();
     stopListening();
     setIsStarted(false);
-    setConversation([]);
-    clearHistory();
+    setCurrentActivity(null);
+    setIsSpeakingMode(false);
+    
+    const finalMessage = `🎉 Lesson Complete!\n\nYou earned ${sessionXP} XP today!\n\nKeep up your ${streak} day streak! 🔥`;
+    setConversation(prev => [...prev, { id: crypto.randomUUID(), role: "ai", text: finalMessage }]);
     toast.success(`Session complete! You earned ${sessionXP} XP`);
+    
+    setTimeout(() => {
+      setConversation([]);
+      clearHistory();
+    }, 3000);
   };
 
   return (
@@ -189,21 +354,26 @@ Make them feel confident and excited to keep speaking!`;
               <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-success to-emerald-400 flex items-center justify-center">
                 <BookOpen className="h-4 w-4 text-white" />
               </div>
-              <h1 className="text-lg font-semibold">Language Partner</h1>
+              <h1 className="text-lg font-semibold">Language Coach</h1>
             </div>
           </div>
 
           {isStarted && (
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
+              {/* Hearts */}
+              <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-destructive/10">
+                <Heart className="h-4 w-4 text-destructive fill-destructive" />
+                <span className="text-sm font-medium text-destructive">{hearts}</span>
+              </div>
               {/* Streak */}
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-warning/10 text-warning">
+              <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-warning/10 text-warning">
                 <Flame className="h-4 w-4" />
                 <span className="text-sm font-medium">{streak}</span>
               </div>
               {/* XP */}
-              <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary/10 text-primary">
-                <Sparkles className="h-4 w-4" />
-                <span className="text-sm font-medium">{sessionXP} XP</span>
+              <div className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-primary/10 text-primary">
+                <Zap className="h-4 w-4" />
+                <span className="text-sm font-medium">{sessionXP}</span>
               </div>
             </div>
           )}
@@ -224,40 +394,60 @@ Make them feel confident and excited to keep speaking!`;
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ type: "spring", bounce: 0.5 }}
-                className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-success via-emerald-400 to-teal-400 flex items-center justify-center shadow-glow"
+                className="w-28 h-28 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-success via-emerald-400 to-teal-400 flex items-center justify-center shadow-glow"
               >
-                <Globe className="w-12 h-12 text-white" />
+                <Globe className="w-14 h-14 text-white" />
               </motion.div>
-              <h2 className="text-3xl font-bold mb-3">Start Speaking!</h2>
+              <h2 className="text-3xl font-bold mb-3">Learn a Language!</h2>
               <p className="text-muted-foreground text-lg">
-                Practice real conversations with AI
+                Duolingo-style lessons with a speaking tutor
               </p>
             </div>
 
             {/* Stats Preview */}
             <div className="grid grid-cols-3 gap-3 mb-8">
-              <div className="glass-card rounded-2xl p-4 text-center">
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                className="glass-card rounded-2xl p-4 text-center hover:scale-105 transition-transform"
+              >
                 <Flame className="h-6 w-6 mx-auto mb-2 text-warning" />
                 <p className="text-2xl font-bold">{streak}</p>
                 <p className="text-xs text-muted-foreground">Day Streak</p>
-              </div>
-              <div className="glass-card rounded-2xl p-4 text-center">
+              </motion.div>
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="glass-card rounded-2xl p-4 text-center hover:scale-105 transition-transform"
+              >
                 <Trophy className="h-6 w-6 mx-auto mb-2 text-primary" />
                 <p className="text-2xl font-bold">12</p>
                 <p className="text-xs text-muted-foreground">Lessons</p>
-              </div>
-              <div className="glass-card rounded-2xl p-4 text-center">
+              </motion.div>
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className="glass-card rounded-2xl p-4 text-center hover:scale-105 transition-transform"
+              >
                 <Target className="h-6 w-6 mx-auto mb-2 text-success" />
                 <p className="text-2xl font-bold">85%</p>
                 <p className="text-xs text-muted-foreground">Accuracy</p>
-              </div>
+              </motion.div>
             </div>
 
             {/* Selection */}
-            <div className="glass-card rounded-3xl p-6 space-y-6">
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="glass-card rounded-3xl p-6 space-y-6"
+            >
               <div>
                 <label className="text-sm font-medium text-muted-foreground mb-3 block">
-                  I want to practice
+                  I want to learn
                 </label>
                 <Select value={language} onValueChange={setLanguage}>
                   <SelectTrigger className="h-14 rounded-2xl text-lg">
@@ -280,61 +470,63 @@ Make them feel confident and excited to keep speaking!`;
                 <label className="text-sm font-medium text-muted-foreground mb-3 block">
                   My current level
                 </label>
-                <Select value={level} onValueChange={setLevel}>
-                  <SelectTrigger className="h-14 rounded-2xl text-lg">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {levels.map((lvl) => (
-                      <SelectItem key={lvl.id} value={lvl.id}>
-                        <span className="flex flex-col">
-                          <span className="font-medium">{lvl.name}</span>
-                          <span className="text-xs text-muted-foreground">{lvl.description}</span>
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="grid grid-cols-3 gap-2">
+                  {levels.map((lvl) => (
+                    <button
+                      key={lvl.id}
+                      onClick={() => setLevel(lvl.id)}
+                      className={`p-3 rounded-xl border-2 transition-all text-center ${
+                        level === lvl.id
+                          ? "border-success bg-success/10"
+                          : "border-border/50 hover:border-border"
+                      }`}
+                    >
+                      <span className="text-2xl block mb-1">{lvl.icon}</span>
+                      <span className="text-sm font-medium block">{lvl.name}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <Button
                 className="w-full h-14 rounded-2xl text-lg font-semibold bg-gradient-to-r from-success to-emerald-400 hover:from-success/90 hover:to-emerald-400/90 shadow-lg"
                 onClick={startSession}
               >
-                Start Conversation
+                <Sparkles className="w-5 h-5 mr-2" />
+                Start Lesson
               </Button>
-            </div>
+            </motion.div>
           </motion.div>
         ) : (
-          /* Conversation Screen */
+          /* Lesson Screen */
           <motion.div
             className="w-full max-w-2xl flex flex-col flex-1"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
           >
-            {/* Language badge & controls */}
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <span className="text-2xl">{selectedLanguage?.flag}</span>
-                <span className="px-3 py-1.5 rounded-xl glass-card text-sm font-medium">
-                  {selectedLanguage?.name} • {selectedLevel?.name}
-                </span>
-              </div>
-              <Button variant="outline" size="sm" onClick={endSession} className="rounded-xl">
-                End Session
-              </Button>
-            </div>
-
-            {/* XP Progress */}
+            {/* Progress bar */}
             <div className="mb-4">
               <div className="flex items-center justify-between text-sm mb-2">
-                <span className="text-muted-foreground">Session Progress</span>
-                <span className="text-primary font-medium">{sessionXP} XP</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">{selectedLanguage?.flag}</span>
+                  <span className="font-medium">{selectedLanguage?.name}</span>
+                </div>
+                <Button variant="outline" size="sm" onClick={endSession} className="rounded-xl">
+                  End Lesson
+                </Button>
               </div>
-              <Progress value={Math.min((sessionXP / 100) * 100, 100)} className="h-2" />
+              <div className="relative">
+                <Progress value={lessonProgress} className="h-3" />
+                <motion.div
+                  className="absolute -top-1 -right-1"
+                  animate={{ scale: lessonProgress >= 100 ? [1, 1.2, 1] : 1 }}
+                >
+                  {lessonProgress >= 100 && <Award className="w-6 h-6 text-warning" />}
+                </motion.div>
+              </div>
             </div>
 
-            {/* Conversation */}
+            {/* Conversation & Activities */}
             <ScrollArea className="flex-1 mb-4" ref={scrollRef}>
               <div className="space-y-4 pr-4">
                 <AnimatePresence>
@@ -348,7 +540,11 @@ Make them feel confident and excited to keep speaking!`;
                       <div
                         className={`max-w-[85%] rounded-2xl px-4 py-3 ${
                           msg.role === "user"
-                            ? "bg-primary text-primary-foreground rounded-br-md"
+                            ? msg.isCorrect === false
+                              ? "bg-destructive/20 text-foreground rounded-br-md"
+                              : msg.isCorrect === true
+                              ? "bg-success/20 text-foreground rounded-br-md"
+                              : "bg-primary text-primary-foreground rounded-br-md"
                             : "glass-card rounded-bl-md"
                         }`}
                       >
@@ -372,6 +568,99 @@ Make them feel confident and excited to keep speaking!`;
                 )}
               </div>
             </ScrollArea>
+
+            {/* Activity Input Area */}
+            {currentActivity && !showFeedback && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-4 p-4 rounded-2xl glass-card"
+              >
+                {/* Multiple choice options */}
+                {currentActivity.options && currentActivity.options.length > 0 && !isSpeakingMode && (
+                  <div className="grid grid-cols-2 gap-2">
+                    {currentActivity.options.map((option, i) => (
+                      <Button
+                        key={i}
+                        variant="outline"
+                        className="h-12 rounded-xl text-left justify-start hover:bg-primary/10 hover:border-primary"
+                        onClick={() => handleOptionSelect(option)}
+                      >
+                        <span className="w-6 h-6 rounded-full bg-muted flex items-center justify-center mr-2 text-sm">
+                          {String.fromCharCode(65 + i)}
+                        </span>
+                        {option}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Text input for type activities */}
+                {!currentActivity.options && !isSpeakingMode && (
+                  <div className="flex gap-2">
+                    <Input
+                      value={userAnswer}
+                      onChange={(e) => setUserAnswer(e.target.value)}
+                      placeholder="Type your answer..."
+                      className="flex-1 h-12 rounded-xl"
+                      onKeyDown={(e) => e.key === "Enter" && handleTextSubmit()}
+                    />
+                    <Button
+                      onClick={handleTextSubmit}
+                      disabled={!userAnswer.trim()}
+                      className="h-12 px-6 rounded-xl bg-success hover:bg-success/90"
+                    >
+                      <CheckCircle2 className="w-5 h-5" />
+                    </Button>
+                  </div>
+                )}
+
+                {/* Speaking mode prompt */}
+                {isSpeakingMode && (
+                  <div className="text-center py-4">
+                    <div className="flex items-center justify-center gap-2 text-primary mb-2">
+                      <Mic className="w-5 h-5 animate-pulse" />
+                      <span className="font-medium">Speak your answer</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Tap the microphone and say your answer
+                    </p>
+                  </div>
+                )}
+              </motion.div>
+            )}
+
+            {/* Feedback display */}
+            <AnimatePresence>
+              {showFeedback && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  className={`mb-4 p-4 rounded-2xl flex items-center gap-3 ${
+                    isCorrectAnswer 
+                      ? "bg-success/20 border border-success/30" 
+                      : "bg-destructive/20 border border-destructive/30"
+                  }`}
+                >
+                  {isCorrectAnswer ? (
+                    <CheckCircle2 className="w-8 h-8 text-success flex-shrink-0" />
+                  ) : (
+                    <XCircle className="w-8 h-8 text-destructive flex-shrink-0" />
+                  )}
+                  <div>
+                    <p className={`font-semibold ${isCorrectAnswer ? "text-success" : "text-destructive"}`}>
+                      {isCorrectAnswer ? "Correct!" : "Not quite..."}
+                    </p>
+                    {!isCorrectAnswer && currentActivity?.correctAnswer && (
+                      <p className="text-sm text-muted-foreground">
+                        Answer: {currentActivity.correctAnswer}
+                      </p>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Voice visualization */}
             <AnimatePresence>
@@ -403,7 +692,7 @@ Make them feel confident and excited to keep speaking!`;
                   disabled={status !== "idle" || conversation.length === 0}
                   title="Repeat last message"
                 >
-                  <RefreshCw className="w-5 h-5" />
+                  <Volume2 className="w-5 h-5" />
                 </Button>
 
                 <VoiceOrb
@@ -413,7 +702,15 @@ Make them feel confident and excited to keep speaking!`;
                   size="lg"
                 />
 
-                <div className="w-12 h-12" /> {/* Spacer */}
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className={`w-12 h-12 rounded-full ${isSpeakingMode ? "bg-primary/20 border-primary" : ""}`}
+                  onClick={() => setIsSpeakingMode(!isSpeakingMode)}
+                  title="Speaking mode"
+                >
+                  <Mic className="w-5 h-5" />
+                </Button>
               </div>
             </div>
           </motion.div>
