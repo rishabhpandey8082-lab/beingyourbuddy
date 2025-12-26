@@ -1,11 +1,12 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Video, VideoOff, User, Briefcase, Brain, Building, Users } from "lucide-react";
+import { ArrowLeft, Video, VideoOff, User, Briefcase, Brain, Building, Users, FileText, Sparkles, CheckCircle2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
+import { Textarea } from "@/components/ui/textarea";
 import Avatar3D from "@/components/Avatar3D";
 import { useChat } from "@/hooks/useChat";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
@@ -17,11 +18,20 @@ import WaveformVisualizer from "@/components/WaveformVisualizer";
 import { toast } from "sonner";
 
 const interviewTypes = [
+  { id: "jd", name: "Job Description", description: "Custom interview from JD", icon: FileText, color: "from-rose-500 to-pink-500" },
   { id: "hr", name: "HR Interview", description: "Behavioral & culture fit", icon: Users, color: "from-blue-500 to-indigo-500" },
   { id: "technical", name: "Technical Interview", description: "Problem-solving & coding", icon: Brain, color: "from-purple-500 to-violet-500" },
   { id: "finance", name: "Finance Interview", description: "Financial analysis & cases", icon: Building, color: "from-emerald-500 to-teal-500" },
   { id: "management", name: "Management Interview", description: "Leadership & strategy", icon: Briefcase, color: "from-orange-500 to-amber-500" },
 ];
+
+interface JDAnalysis {
+  role: string;
+  skills: string[];
+  responsibilities: string[];
+  experienceLevel: string;
+  keywords: string[];
+}
 
 interface Message {
   id: string;
@@ -42,6 +52,12 @@ const InterviewPractice = () => {
   const [questionCount, setQuestionCount] = useState(0);
   const [status, setStatus] = useState<"idle" | "listening" | "thinking" | "speaking">("idle");
   const scrollRef = useRef<HTMLDivElement>(null);
+  
+  // JD-based interview states
+  const [jobDescription, setJobDescription] = useState("");
+  const [jdAnalysis, setJdAnalysis] = useState<JDAnalysis | null>(null);
+  const [isAnalyzingJD, setIsAnalyzingJD] = useState(false);
+  const [showJDInput, setShowJDInput] = useState(false);
 
   const { sendMessage, isLoading, currentResponse, clearHistory } = useChat();
   const { isListening, transcript, startListening, stopListening, resetTranscript, isSupported } = useSpeechRecognition();
@@ -78,13 +94,59 @@ const InterviewPractice = () => {
     }
   }, [messages]);
 
+  // Analyze Job Description
+  const analyzeJobDescription = async () => {
+    if (!jobDescription.trim()) {
+      toast.error("Please paste a job description first");
+      return;
+    }
+
+    setIsAnalyzingJD(true);
+    try {
+      const analysisPrompt = `Analyze this job description and extract structured information. Return ONLY valid JSON with this exact structure:
+{
+  "role": "job title",
+  "skills": ["skill1", "skill2", ...],
+  "responsibilities": ["resp1", "resp2", ...],
+  "experienceLevel": "entry/mid/senior/executive",
+  "keywords": ["keyword1", "keyword2", ...]
+}
+
+Job Description:
+${jobDescription}`;
+
+      const response = await sendMessage(analysisPrompt, "friend", {});
+      
+      // Parse the JSON from response
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const analysis = JSON.parse(jsonMatch[0]) as JDAnalysis;
+        setJdAnalysis(analysis);
+        toast.success("Job description analyzed successfully!");
+      } else {
+        throw new Error("Could not parse analysis");
+      }
+    } catch (error) {
+      console.error("JD analysis error:", error);
+      toast.error("Failed to analyze. Please try again.");
+    } finally {
+      setIsAnalyzingJD(false);
+    }
+  };
+
   const startInterview = async () => {
     clearHistory();
     setMessages([]);
     setQuestionCount(0);
     setIsStarted(true);
 
-    const greeting = `Hello and welcome! I'm your ${selectedType?.name} interviewer today. Take a moment to relax and when you're ready, let's begin. First, can you tell me a little about yourself and your background?`;
+    let greeting: string;
+    
+    if (interviewType === "jd" && jdAnalysis) {
+      greeting = `Hello and welcome! I'm your interviewer for the ${jdAnalysis.role} position today. I've reviewed the job requirements carefully. Take a moment to relax, and when you're ready, let's begin. First, can you walk me through your background and why you're interested in this ${jdAnalysis.role} role?`;
+    } else {
+      greeting = `Hello and welcome! I'm your ${selectedType?.name} interviewer today. Take a moment to relax and when you're ready, let's begin. First, can you tell me a little about yourself and your background?`;
+    }
 
     setCurrentQuestion(greeting);
     setMessages([{ id: crypto.randomUUID(), role: "interviewer", content: greeting }]);
@@ -97,7 +159,31 @@ const InterviewPractice = () => {
     setCurrentQuestion("");
 
     try {
-      const systemContext = `You are a professional ${selectedType?.name} interviewer. 
+      let systemContext: string;
+      
+      if (interviewType === "jd" && jdAnalysis) {
+        systemContext = `You are a professional interviewer conducting a MOCK INTERVIEW for the position of ${jdAnalysis.role}.
+
+JOB REQUIREMENTS:
+- Required Skills: ${jdAnalysis.skills.join(", ")}
+- Key Responsibilities: ${jdAnalysis.responsibilities.join("; ")}
+- Experience Level: ${jdAnalysis.experienceLevel}
+- Important Keywords: ${jdAnalysis.keywords.join(", ")}
+
+INTERVIEW RULES:
+1. Ask ONE question at a time - mix HR, technical, situational, and behavioral questions
+2. Match difficulty to the ${jdAnalysis.experienceLevel} experience level
+3. After EACH answer:
+   - Give SHORT, constructive feedback (1-2 sentences)
+   - If the answer could be improved, suggest a better version
+   - Tell what recruiters expect for this ${jdAnalysis.role} role
+4. Then ask the next question
+
+TONE: Professional, supportive, like a real interview environment. No casual chatting.
+
+This is question ${questionCount + 1}. After 6-8 questions, wrap up with final feedback.`;
+      } else {
+        systemContext = `You are a professional ${selectedType?.name} interviewer. 
 
 Your approach:
 - Ask one clear question at a time
@@ -109,6 +195,7 @@ Your approach:
 - For ${selectedType?.name}: Focus on ${selectedType?.description?.toLowerCase()}
 
 Remember: This is question ${questionCount + 1}. After about 5-7 questions, start wrapping up the interview naturally.`;
+      }
 
       const response = await sendMessage(userText, "interviewer", {
         conversationContext: systemContext,
@@ -142,8 +229,22 @@ Remember: This is question ${questionCount + 1}. After about 5-7 questions, star
     setIsStarted(false);
     setMessages([]);
     setCurrentQuestion("");
+    setShowJDInput(false);
+    setJdAnalysis(null);
+    setJobDescription("");
     clearHistory();
     toast.success("Interview session ended. Great practice!");
+  };
+
+  const handleTypeSelect = (typeId: string) => {
+    setInterviewType(typeId);
+    if (typeId === "jd") {
+      setShowJDInput(true);
+    } else {
+      setShowJDInput(false);
+      setJdAnalysis(null);
+      setJobDescription("");
+    }
   };
 
   return (
@@ -211,29 +312,135 @@ Remember: This is question ${questionCount + 1}. After about 5-7 questions, star
                     return (
                       <button
                         key={type.id}
-                        onClick={() => setInterviewType(type.id)}
+                        onClick={() => handleTypeSelect(type.id)}
                         className={`p-4 rounded-2xl border-2 transition-all text-left ${
                           interviewType === type.id
                             ? "border-primary bg-primary/10"
                             : "border-border/50 hover:border-border"
-                        }`}
+                        } ${type.id === "jd" ? "col-span-2" : ""}`}
                       >
-                        <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${type.color} flex items-center justify-center mb-3`}>
-                          <Icon className="w-5 h-5 text-white" />
+                        <div className="flex items-start gap-3">
+                          <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${type.color} flex items-center justify-center flex-shrink-0`}>
+                            <Icon className="w-5 h-5 text-white" />
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-semibold text-sm">{type.name}</p>
+                            <p className="text-xs text-muted-foreground mt-1">{type.description}</p>
+                            {type.id === "jd" && (
+                              <p className="text-xs text-primary mt-1 flex items-center gap-1">
+                                <Sparkles className="w-3 h-3" /> AI-powered custom interview
+                              </p>
+                            )}
+                          </div>
                         </div>
-                        <p className="font-semibold text-sm">{type.name}</p>
-                        <p className="text-xs text-muted-foreground mt-1">{type.description}</p>
                       </button>
                     );
                   })}
                 </div>
               </div>
 
+              {/* JD Input Section */}
+              <AnimatePresence>
+                {showJDInput && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="space-y-4 overflow-hidden"
+                  >
+                    <div className="p-4 rounded-2xl bg-primary/5 border border-primary/20">
+                      <div className="flex items-center gap-2 mb-3">
+                        <FileText className="w-4 h-4 text-primary" />
+                        <span className="text-sm font-medium">Paste Job Description</span>
+                      </div>
+                      <Textarea
+                        placeholder="Paste the full job description here... Include job title, responsibilities, required skills, and qualifications."
+                        value={jobDescription}
+                        onChange={(e) => setJobDescription(e.target.value)}
+                        className="min-h-[150px] bg-background/50 border-border/50 rounded-xl resize-none"
+                        disabled={isAnalyzingJD || !!jdAnalysis}
+                      />
+                      
+                      {!jdAnalysis && (
+                        <Button
+                          onClick={analyzeJobDescription}
+                          disabled={isAnalyzingJD || !jobDescription.trim()}
+                          className="w-full mt-3 rounded-xl bg-gradient-to-r from-rose-500 to-pink-500 hover:opacity-90"
+                        >
+                          {isAnalyzingJD ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Analyzing...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="w-4 h-4 mr-2" />
+                              Analyze Job Description
+                            </>
+                          )}
+                        </Button>
+                      )}
+                    </div>
+
+                    {/* Analysis Results */}
+                    {jdAnalysis && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-3"
+                      >
+                        <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span className="text-sm font-medium">Analysis Complete</span>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <div className="flex items-start gap-2">
+                            <span className="text-xs text-muted-foreground w-20 flex-shrink-0">Role:</span>
+                            <span className="text-sm font-medium">{jdAnalysis.role}</span>
+                          </div>
+                          <div className="flex items-start gap-2">
+                            <span className="text-xs text-muted-foreground w-20 flex-shrink-0">Level:</span>
+                            <span className="text-sm capitalize">{jdAnalysis.experienceLevel}</span>
+                          </div>
+                          <div className="flex items-start gap-2">
+                            <span className="text-xs text-muted-foreground w-20 flex-shrink-0">Skills:</span>
+                            <div className="flex flex-wrap gap-1">
+                              {jdAnalysis.skills.slice(0, 5).map((skill, i) => (
+                                <span key={i} className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                                  {skill}
+                                </span>
+                              ))}
+                              {jdAnalysis.skills.length > 5 && (
+                                <span className="text-xs text-muted-foreground">+{jdAnalysis.skills.length - 5} more</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setJdAnalysis(null);
+                            setJobDescription("");
+                          }}
+                          className="w-full mt-2 rounded-xl text-xs"
+                        >
+                          Use Different JD
+                        </Button>
+                      </motion.div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               <Button
                 className={`w-full h-14 rounded-2xl text-lg font-semibold bg-gradient-to-r ${selectedType?.color} hover:opacity-90 shadow-lg`}
                 onClick={startInterview}
+                disabled={interviewType === "jd" && !jdAnalysis}
               >
-                Start Interview
+                {interviewType === "jd" && !jdAnalysis ? "Analyze JD First" : "Start Interview"}
               </Button>
             </div>
           </motion.div>
@@ -247,7 +454,9 @@ Remember: This is question ${questionCount + 1}. After about 5-7 questions, star
             {/* Progress */}
             <div className="mb-6">
               <div className="flex items-center justify-between text-sm mb-2">
-                <span className="text-muted-foreground">{selectedType?.name}</span>
+                <span className="text-muted-foreground">
+                  {interviewType === "jd" && jdAnalysis ? jdAnalysis.role : selectedType?.name}
+                </span>
                 <Button variant="ghost" size="sm" onClick={endInterview} className="rounded-xl text-muted-foreground">
                   End Interview
                 </Button>
