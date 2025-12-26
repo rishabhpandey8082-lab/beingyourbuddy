@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Video, VideoOff, User, Briefcase, Brain, Building, Users, FileText, Sparkles, CheckCircle2, Loader2 } from "lucide-react";
+import { ArrowLeft, Video, VideoOff, User, Briefcase, Brain, Building, Users, FileText, Sparkles, CheckCircle2, Loader2, Award } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -15,6 +15,7 @@ import { useCamera } from "@/hooks/useCamera";
 import VoiceOrb from "@/components/VoiceOrb";
 import StatusIndicator from "@/components/StatusIndicator";
 import WaveformVisualizer from "@/components/WaveformVisualizer";
+import InterviewReport from "@/components/InterviewReport";
 import { toast } from "sonner";
 
 const interviewTypes = [
@@ -58,6 +59,7 @@ const InterviewPractice = () => {
   const [jdAnalysis, setJdAnalysis] = useState<JDAnalysis | null>(null);
   const [isAnalyzingJD, setIsAnalyzingJD] = useState(false);
   const [showJDInput, setShowJDInput] = useState(false);
+  const [showReport, setShowReport] = useState(false);
 
   const { sendMessage, isLoading, currentResponse, clearHistory } = useChat();
   const { isListening, transcript, startListening, stopListening, resetTranscript, isSupported } = useSpeechRecognition();
@@ -223,15 +225,25 @@ Remember: This is question ${questionCount + 1}. After about 5-7 questions, star
     }
   }, [isListening, isSupported, startListening, stopListening, stopSpeaking]);
 
-  const endInterview = () => {
+  const endInterview = (showReportModal = false) => {
     stopSpeaking();
     stopListening();
+    
+    if (showReportModal && interviewType === "jd" && jdAnalysis && questionCount >= 2) {
+      setShowReport(true);
+    } else {
+      resetInterviewState();
+    }
+  };
+
+  const resetInterviewState = () => {
     setIsStarted(false);
     setMessages([]);
     setCurrentQuestion("");
     setShowJDInput(false);
     setJdAnalysis(null);
     setJobDescription("");
+    setShowReport(false);
     clearHistory();
     toast.success("Interview session ended. Great practice!");
   };
@@ -457,7 +469,7 @@ Remember: This is question ${questionCount + 1}. After about 5-7 questions, star
                 <span className="text-muted-foreground">
                   {interviewType === "jd" && jdAnalysis ? jdAnalysis.role : selectedType?.name}
                 </span>
-                <Button variant="ghost" size="sm" onClick={endInterview} className="rounded-xl text-muted-foreground">
+                <Button variant="ghost" size="sm" onClick={() => endInterview(true)} className="rounded-xl text-muted-foreground">
                   End Interview
                 </Button>
               </div>
@@ -618,6 +630,19 @@ Remember: This is question ${questionCount + 1}. After about 5-7 questions, star
           </motion.div>
         )}
       </main>
+
+      {/* Interview Report Modal */}
+      <AnimatePresence>
+        {showReport && jdAnalysis && (
+          <InterviewReport
+            role={jdAnalysis.role}
+            experienceLevel={jdAnalysis.experienceLevel}
+            questionCount={questionCount}
+            messages={messages}
+            onClose={resetInterviewState}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };
