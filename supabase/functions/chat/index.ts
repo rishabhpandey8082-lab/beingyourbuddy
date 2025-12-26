@@ -122,34 +122,27 @@ serve(async (req) => {
   }
 
   try {
-    // Authenticate the user
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      console.log("Auth: Missing authorization header");
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const supabaseClient = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      { global: { headers: { Authorization: authHeader } } }
-    );
-
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
-    if (authError || !user) {
-      console.log("Auth: Authentication failed");
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Log request ID for correlation (not user ID for privacy)
+    // Log request ID for correlation (no PII)
     const requestId = crypto.randomUUID().slice(0, 8);
-    console.log(`[${requestId}] Processing chat request`);
+
+    // Optional authentication: allow guests (no Authorization header)
+    const authHeader = req.headers.get("Authorization");
+    let user: any = null;
+
+    if (authHeader) {
+      const supabaseClient = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+        { global: { headers: { Authorization: authHeader } } }
+      );
+
+      const { data, error } = await supabaseClient.auth.getUser();
+      if (!error) {
+        user = data.user;
+      }
+    }
+
+    console.log(`[${requestId}] Processing chat request (${user ? "authed" : "guest"})`);
 
     const body = await req.json();
     const { messages, mode = "friend", userName, conversationContext } = body;
