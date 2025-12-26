@@ -37,32 +37,24 @@ serve(async (req) => {
   const requestId = crypto.randomUUID().slice(0, 8);
 
   try {
-    // Authenticate the user
+    // Optional authentication: allow guests (no Authorization header)
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      console.log(`[${requestId}] Auth: Missing authorization header`);
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    let user: any = null;
+
+    if (authHeader) {
+      const supabaseClient = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+        { global: { headers: { Authorization: authHeader } } }
+      );
+
+      const { data, error } = await supabaseClient.auth.getUser();
+      if (!error) {
+        user = data.user;
+      }
     }
 
-    const supabaseClient = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      { global: { headers: { Authorization: authHeader } } }
-    );
-
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
-    if (authError || !user) {
-      console.log(`[${requestId}] Auth: Authentication failed`);
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    console.log(`[${requestId}] Processing TTS request`);
+    console.log(`[${requestId}] Processing TTS request (${user ? "authed" : "guest"})`);
 
     const body = await req.json();
     const { text, voiceId = "EXAVITQu4vr4xnSDxMaL" } = body;
