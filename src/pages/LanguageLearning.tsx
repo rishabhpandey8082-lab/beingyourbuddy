@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   ArrowLeft, Globe, RefreshCw, Trophy, Flame, Target, BookOpen, Sparkles, 
   Mic, Volume2, CheckCircle2, XCircle, Star, Zap, Heart, Award, 
-  GraduationCap, MessageCircle, FileText, Pause, Play, RotateCcw
+  GraduationCap, MessageCircle, FileText, Pause, Play, RotateCcw, Check
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -13,7 +13,7 @@ import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useChat } from "@/hooks/useChat";
-import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
+import { useCleanSpeechRecognition } from "@/hooks/useCleanSpeechRecognition";
 import { useElevenLabsTTS } from "@/hooks/useElevenLabsTTS";
 import VoiceOrb from "@/components/VoiceOrb";
 import StatusIndicator from "@/components/StatusIndicator";
@@ -25,6 +25,9 @@ type LearningMode = "ielts" | "german" | "general";
 type IELTSSkill = "speaking" | "writing" | "reading" | "listening";
 type GermanLevel = "A1" | "A2" | "B1" | "B2" | "C1";
 type ActivityType = "fill_blank" | "choose_option" | "translate" | "yes_no" | "type_sentence" | "speaking";
+
+// Supported Languages
+type TargetLanguage = "english" | "german" | "french" | "spanish" | "italian" | "japanese" | "korean" | "hindi" | "portuguese" | "chinese";
 
 interface Activity {
   type: ActivityType;
@@ -55,7 +58,20 @@ interface IELTSFeedback {
 const learningModes = [
   { id: "ielts" as const, label: "IELTS Preparation", icon: GraduationCap, description: "Speaking, Writing, Reading, Listening", color: "from-blue-500 to-indigo-500" },
   { id: "german" as const, label: "German Goethe Exam", icon: Globe, description: "A1 to C1 Level Preparation", color: "from-amber-500 to-orange-500" },
-  { id: "general" as const, label: "General English", icon: MessageCircle, description: "Daily practice & confidence", color: "from-emerald-500 to-teal-500" },
+  { id: "general" as const, label: "General Practice", icon: MessageCircle, description: "Daily practice & confidence", color: "from-emerald-500 to-teal-500" },
+];
+
+const targetLanguages: { id: TargetLanguage; name: string; flag: string }[] = [
+  { id: "english", name: "English", flag: "🇬🇧" },
+  { id: "german", name: "German", flag: "🇩🇪" },
+  { id: "french", name: "French", flag: "🇫🇷" },
+  { id: "spanish", name: "Spanish", flag: "🇪🇸" },
+  { id: "italian", name: "Italian", flag: "🇮🇹" },
+  { id: "japanese", name: "Japanese", flag: "🇯🇵" },
+  { id: "korean", name: "Korean", flag: "🇰🇷" },
+  { id: "hindi", name: "Hindi", flag: "🇮🇳" },
+  { id: "portuguese", name: "Portuguese", flag: "🇧🇷" },
+  { id: "chinese", name: "Chinese", flag: "🇨🇳" },
 ];
 
 const germanLevels: { id: GermanLevel; name: string; description: string }[] = [
@@ -92,6 +108,7 @@ const corrections = [
 const LanguageLearning = () => {
   // Mode & Setup State
   const [selectedMode, setSelectedMode] = useState<LearningMode | null>(null);
+  const [targetLanguage, setTargetLanguage] = useState<TargetLanguage>("english");
   const [germanLevel, setGermanLevel] = useState<GermanLevel>("A1");
   const [ieltsSkill, setIeltsSkill] = useState<IELTSSkill>("speaking");
   const [ieltsPart, setIeltsPart] = useState(1);
@@ -113,15 +130,13 @@ const LanguageLearning = () => {
   const [talkOnlyMode, setTalkOnlyMode] = useState(false);
   const [slowMode, setSlowMode] = useState(false);
   
-  // Voice Control State - Critical for single sentence capture
-  const [voiceProcessed, setVoiceProcessed] = useState(false);
-  const [pendingVoiceInput, setPendingVoiceInput] = useState<string | null>(null);
-  const voiceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Voice Control State - Using confirmation flow
+  const [pendingVoiceConfirm, setPendingVoiceConfirm] = useState<string | null>(null);
   
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { sendMessage, isLoading, currentResponse, clearHistory } = useChat();
-  const { isListening, transcript, startListening, stopListening, resetTranscript, isSupported } = useSpeechRecognition();
+  const { isListening, transcript, startListening, stopListening, resetTranscript, isSupported, hasResult } = useCleanSpeechRecognition();
   const { speak, stop: stopSpeaking, isSpeaking, isLoading: isTTSLoading } = useElevenLabsTTS();
 
   // Auto-scroll
@@ -139,51 +154,30 @@ const LanguageLearning = () => {
     else setStatus("idle");
   }, [isListening, isLoading, isSpeaking, isTTSLoading]);
 
-  // Critical: Single sentence voice capture with auto-stop
+  // Handle voice input completion - show confirmation
   useEffect(() => {
-    if (isListening && transcript.trim() && !voiceProcessed) {
-      // Clear any existing timeout
-      if (voiceTimeoutRef.current) {
-        clearTimeout(voiceTimeoutRef.current);
-      }
-      
-      // Set pending input
-      setPendingVoiceInput(transcript.trim());
-      
-      // Auto-stop after 2 seconds of silence
-      voiceTimeoutRef.current = setTimeout(() => {
-        if (transcript.trim()) {
-          stopListening();
-          setVoiceProcessed(true);
-        }
-      }, 2000);
+    if (!isListening && hasResult && transcript.trim() && isStarted) {
+      setPendingVoiceConfirm(transcript.trim());
     }
-  }, [transcript, isListening, voiceProcessed, stopListening]);
+  }, [isListening, hasResult, transcript, isStarted]);
 
-  // Process voice input after stopping
-  useEffect(() => {
-    if (!isListening && pendingVoiceInput && voiceProcessed && isStarted) {
-      handleVoiceAnswer(pendingVoiceInput);
-      setPendingVoiceInput(null);
+  const confirmVoiceInput = () => {
+    if (pendingVoiceConfirm) {
+      handleVoiceAnswer(pendingVoiceConfirm);
+      setPendingVoiceConfirm(null);
       resetTranscript();
-      
-      // Reset for next voice input
-      setTimeout(() => {
-        setVoiceProcessed(false);
-      }, 500);
     }
-  }, [isListening, pendingVoiceInput, voiceProcessed, isStarted]);
+  };
 
-  // Cleanup voice timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (voiceTimeoutRef.current) {
-        clearTimeout(voiceTimeoutRef.current);
-      }
-    };
-  }, []);
+  const retryVoiceInput = () => {
+    setPendingVoiceConfirm(null);
+    resetTranscript();
+    startListening();
+  };
 
   const getModeSystemPrompt = (): string => {
+    const langName = targetLanguages.find(l => l.id === targetLanguage)?.name || "English";
+    
     if (selectedMode === "ielts") {
       if (ieltsSkill === "speaking") {
         return `You are an IELTS Speaking examiner. Follow the official IELTS format strictly.
@@ -220,8 +214,8 @@ Always respond in German first, then provide English help if needed.
 Encourage the user warmly after every attempt.`;
     }
     
-    return `You are a Duolingo-style English tutor. Focus on:
-- Daily conversation
+    return `You are a Duolingo-style ${langName} tutor. Focus on:
+- Daily conversation in ${langName}
 - Vocabulary building
 - Grammar practice
 - Speaking confidence
@@ -245,9 +239,9 @@ Use activities: fill blanks, choose option, translate, speak.`;
     setIsStarted(true);
     setIsSpeakingMode(false);
     setIeltsPart(1);
-    setVoiceProcessed(false);
-    setPendingVoiceInput(null);
+    setPendingVoiceConfirm(null);
 
+    const langName = targetLanguages.find(l => l.id === targetLanguage)?.name || "English";
     let greeting = "";
     
     if (selectedMode === "ielts") {
@@ -255,7 +249,7 @@ Use activities: fill blanks, choose option, translate, speak.`;
     } else if (selectedMode === "german") {
       greeting = `🇩🇪 Willkommen! Welcome to German ${germanLevel} Practice!\n\nI'm your Goethe exam coach. We'll practice Sprechen, Hören, Lesen, and Schreiben.\n\nLass uns anfangen! (Let's begin!) 🎯`;
     } else {
-      greeting = `🎉 Welcome to your English Practice Session!\n\nI'm your Duolingo-style coach. We'll learn step-by-step with fun activities!\n\nReady to start? 💪`;
+      greeting = `🎉 Welcome to your ${langName} Practice Session!\n\nI'm your Duolingo-style coach. We'll learn step-by-step with fun activities!\n\nReady to start? 💪`;
     }
 
     setConversation([{ id: crypto.randomUUID(), role: "ai", text: greeting }]);
@@ -529,10 +523,9 @@ Provide JSON feedback:
       stopListening();
     } else {
       stopSpeaking();
-      setVoiceProcessed(false);
-      setPendingVoiceInput(null);
+      setPendingVoiceConfirm(null);
+      resetTranscript();
       startListening();
-      
       // Auto-stop after 5 seconds max
       setTimeout(() => {
         if (isListening) {
@@ -917,13 +910,10 @@ Provide JSON feedback:
                       <span className="font-medium">Tap speak and say ONE sentence</span>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      I'll listen for 2-3 seconds then stop
+                      I'll listen for one sentence
                     </p>
-                    {pendingVoiceInput && (
-                      <div className="mt-3 p-2 rounded-xl bg-muted/50">
-                        <p className="text-sm">Heard: "{pendingVoiceInput}"</p>
-                      </div>
-                    )}
+                  </div>
+                )}
                   </div>
                 )}
               </motion.div>

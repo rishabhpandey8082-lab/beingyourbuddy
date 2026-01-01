@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Video, VideoOff, User, Briefcase, Brain, Building, Users, FileText, Sparkles, CheckCircle2, Loader2, Award } from "lucide-react";
+import { ArrowLeft, Video, VideoOff, User, Briefcase, Brain, Building, Users, FileText, Sparkles, CheckCircle2, Loader2, Award, Check, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -9,7 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import Avatar3D from "@/components/Avatar3D";
 import { useChat } from "@/hooks/useChat";
-import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
+import { useCleanSpeechRecognition } from "@/hooks/useCleanSpeechRecognition";
 import { useElevenLabsTTS } from "@/hooks/useElevenLabsTTS";
 import { useCamera } from "@/hooks/useCamera";
 import VoiceOrb from "@/components/VoiceOrb";
@@ -52,6 +52,7 @@ const InterviewPractice = () => {
   const [currentQuestion, setCurrentQuestion] = useState("");
   const [questionCount, setQuestionCount] = useState(0);
   const [status, setStatus] = useState<"idle" | "listening" | "thinking" | "speaking">("idle");
+  const [pendingVoiceConfirm, setPendingVoiceConfirm] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   
   // JD-based interview states
@@ -62,7 +63,7 @@ const InterviewPractice = () => {
   const [showReport, setShowReport] = useState(false);
 
   const { sendMessage, isLoading, currentResponse, clearHistory } = useChat();
-  const { isListening, transcript, startListening, stopListening, resetTranscript, isSupported } = useSpeechRecognition();
+  const { isListening, transcript, startListening, stopListening, resetTranscript, isSupported, hasResult } = useCleanSpeechRecognition();
   const { speak, stop: stopSpeaking, isSpeaking, isLoading: isTTSLoading } = useElevenLabsTTS();
   const { videoRef, isEnabled: cameraEnabled, isLoading: cameraLoading, toggleCamera } = useCamera();
 
@@ -81,13 +82,12 @@ const InterviewPractice = () => {
     if (currentResponse) setCurrentQuestion(currentResponse);
   }, [currentResponse]);
 
-  // Handle voice input completion
+  // Handle voice input completion - show confirmation
   useEffect(() => {
-    if (!isListening && transcript.trim() && isStarted) {
-      handleUserResponse(transcript.trim());
-      resetTranscript();
+    if (!isListening && hasResult && transcript.trim() && isStarted) {
+      setPendingVoiceConfirm(transcript.trim());
     }
-  }, [isListening, isStarted]);
+  }, [isListening, hasResult, transcript, isStarted]);
 
   // Auto-scroll
   useEffect(() => {
@@ -221,13 +221,30 @@ Remember: This is question ${questionCount + 1}. After about 5-7 questions, star
       stopListening();
     } else {
       stopSpeaking();
+      setPendingVoiceConfirm(null);
+      resetTranscript();
       startListening();
     }
-  }, [isListening, isSupported, startListening, stopListening, stopSpeaking]);
+  }, [isListening, isSupported, startListening, stopListening, stopSpeaking, resetTranscript]);
+
+  const confirmVoiceInput = () => {
+    if (pendingVoiceConfirm) {
+      handleUserResponse(pendingVoiceConfirm);
+      setPendingVoiceConfirm(null);
+      resetTranscript();
+    }
+  };
+
+  const retryVoiceInput = () => {
+    setPendingVoiceConfirm(null);
+    resetTranscript();
+    startListening();
+  };
 
   const endInterview = (showReportModal = false) => {
     stopSpeaking();
     stopListening();
+    setPendingVoiceConfirm(null);
     
     if (showReportModal && interviewType === "jd" && jdAnalysis && questionCount >= 2) {
       setShowReport(true);
@@ -244,6 +261,7 @@ Remember: This is question ${questionCount + 1}. After about 5-7 questions, star
     setJdAnalysis(null);
     setJobDescription("");
     setShowReport(false);
+    setPendingVoiceConfirm(null);
     clearHistory();
     toast.success("Interview session ended. Great practice!");
   };
@@ -582,9 +600,41 @@ Remember: This is question ${questionCount + 1}. After about 5-7 questions, star
               </motion.div>
             )}
 
+            {/* Voice confirmation dialog */}
+            <AnimatePresence>
+              {pendingVoiceConfirm && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="mb-6 p-4 rounded-2xl bg-muted/50 border border-border/50 max-w-md mx-auto"
+                >
+                  <p className="text-sm text-muted-foreground mb-2 text-center">I heard:</p>
+                  <p className="text-base font-medium mb-4 text-center">"{pendingVoiceConfirm}"</p>
+                  <div className="flex items-center justify-center gap-3">
+                    <Button
+                      onClick={confirmVoiceInput}
+                      className="rounded-xl bg-primary"
+                    >
+                      <Check className="w-4 h-4 mr-2" />
+                      Correct
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={retryVoiceInput}
+                      className="rounded-xl"
+                    >
+                      <RotateCcw className="w-4 h-4 mr-2" />
+                      Retry
+                    </Button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {/* Voice visualization */}
             <AnimatePresence>
-              {status === "listening" && (
+              {status === "listening" && !pendingVoiceConfirm && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
@@ -592,9 +642,7 @@ Remember: This is question ${questionCount + 1}. After about 5-7 questions, star
                   className="mb-6"
                 >
                   <WaveformVisualizer isActive={true} className="h-16 max-w-md mx-auto" />
-                  {transcript && (
-                    <p className="text-sm text-muted-foreground mt-3 text-center italic">"{transcript}"</p>
-                  )}
+                  <p className="text-sm text-muted-foreground mt-3 text-center">Listening for one sentence...</p>
                 </motion.div>
               )}
             </AnimatePresence>
