@@ -1,12 +1,12 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Send, Volume2, VolumeX, History, Sparkles, MessageSquare } from "lucide-react";
+import { ArrowLeft, Send, Volume2, VolumeX, History, Sparkles, MessageSquare, Check, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useChat } from "@/hooks/useChat";
-import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
+import { useCleanSpeechRecognition } from "@/hooks/useCleanSpeechRecognition";
 import { useElevenLabsTTS } from "@/hooks/useElevenLabsTTS";
 import { useAuth } from "@/contexts/AuthContext";
 import ConversationHistory from "@/components/ConversationHistory";
@@ -29,12 +29,13 @@ const AISearch = () => {
   const [messages, setMessages] = useState<ChatItem[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [status, setStatus] = useState<"idle" | "listening" | "thinking" | "speaking">("idle");
+  const [pendingVoiceConfirm, setPendingVoiceConfirm] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const { user } = useAuth();
   const { sendMessage, isLoading, currentResponse, clearHistory } = useChat();
-  const { isListening, transcript, startListening, stopListening, resetTranscript, isSupported } = useSpeechRecognition();
+  const { isListening, transcript, startListening, stopListening, resetTranscript, isSupported, hasResult } = useCleanSpeechRecognition();
   const { speak, stop: stopSpeaking, isSpeaking, isLoading: isTTSLoading } = useElevenLabsTTS();
 
   // Update status
@@ -52,13 +53,12 @@ const AISearch = () => {
     }
   }, [messages, currentResponse]);
 
-  // Handle voice input completion
+  // Handle voice input completion - show confirmation
   useEffect(() => {
-    if (!isListening && transcript.trim()) {
-      handleSend(transcript.trim());
-      resetTranscript();
+    if (!isListening && hasResult && transcript.trim()) {
+      setPendingVoiceConfirm(transcript.trim());
     }
-  }, [isListening]);
+  }, [isListening, hasResult, transcript]);
 
   const handleSend = async (text: string) => {
     if (!text.trim()) return;
@@ -127,9 +127,25 @@ const AISearch = () => {
       stopListening();
     } else {
       stopSpeaking();
+      setPendingVoiceConfirm(null);
+      resetTranscript();
       startListening();
     }
-  }, [isListening, isSupported, startListening, stopListening, stopSpeaking]);
+  }, [isListening, isSupported, startListening, stopListening, stopSpeaking, resetTranscript]);
+
+  const confirmVoiceInput = () => {
+    if (pendingVoiceConfirm) {
+      handleSend(pendingVoiceConfirm);
+      setPendingVoiceConfirm(null);
+      resetTranscript();
+    }
+  };
+
+  const retryVoiceInput = () => {
+    setPendingVoiceConfirm(null);
+    resetTranscript();
+    startListening();
+  };
 
   const handleSpeakMessage = (content: string) => {
     if (isSpeaking) {
@@ -142,6 +158,7 @@ const AISearch = () => {
   const startNewChat = () => {
     setMessages([]);
     clearHistory();
+    setPendingVoiceConfirm(null);
     toast.success("New conversation started");
   };
 
@@ -247,8 +264,40 @@ const AISearch = () => {
               </motion.p>
 
               {/* Voice visualization when listening */}
+              {/* Voice confirmation dialog */}
               <AnimatePresence>
-                {status === "listening" && (
+                {pendingVoiceConfirm && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    className="mb-6 p-4 rounded-2xl bg-muted/50 border border-border/50"
+                  >
+                    <p className="text-sm text-muted-foreground mb-2">I heard:</p>
+                    <p className="text-base font-medium mb-4">"{pendingVoiceConfirm}"</p>
+                    <div className="flex items-center justify-center gap-3">
+                      <Button
+                        onClick={confirmVoiceInput}
+                        className="rounded-xl bg-primary"
+                      >
+                        <Check className="w-4 h-4 mr-2" />
+                        Correct
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={retryVoiceInput}
+                        className="rounded-xl"
+                      >
+                        <RotateCcw className="w-4 h-4 mr-2" />
+                        Retry
+                      </Button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <AnimatePresence>
+                {status === "listening" && !pendingVoiceConfirm && (
                   <motion.div
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: "auto" }}
@@ -256,9 +305,7 @@ const AISearch = () => {
                     className="mb-6"
                   >
                     <WaveformVisualizer isActive={true} className="h-16" />
-                    {transcript && (
-                      <p className="text-sm text-muted-foreground mt-4 italic">"{transcript}"</p>
-                    )}
+                    <p className="text-sm text-muted-foreground mt-4 text-center">Listening for one sentence...</p>
                   </motion.div>
                 )}
               </AnimatePresence>
