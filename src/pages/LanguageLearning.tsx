@@ -1,12 +1,17 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Globe, RefreshCw, Trophy, Flame, Target, BookOpen, Sparkles, Mic, Volume2, CheckCircle2, XCircle, Star, Zap, Heart, Award } from "lucide-react";
+import { 
+  ArrowLeft, Globe, RefreshCw, Trophy, Flame, Target, BookOpen, Sparkles, 
+  Mic, Volume2, CheckCircle2, XCircle, Star, Zap, Heart, Award, 
+  GraduationCap, MessageCircle, FileText, Pause, Play, RotateCcw
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { useChat } from "@/hooks/useChat";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useElevenLabsTTS } from "@/hooks/useElevenLabsTTS";
@@ -15,27 +20,10 @@ import StatusIndicator from "@/components/StatusIndicator";
 import WaveformVisualizer from "@/components/WaveformVisualizer";
 import { toast } from "sonner";
 
-const languages = [
-  { code: "en", name: "English", flag: "🇬🇧" },
-  { code: "es", name: "Spanish", flag: "🇪🇸" },
-  { code: "fr", name: "French", flag: "🇫🇷" },
-  { code: "de", name: "German", flag: "🇩🇪" },
-  { code: "it", name: "Italian", flag: "🇮🇹" },
-  { code: "pt", name: "Portuguese", flag: "🇵🇹" },
-  { code: "ja", name: "Japanese", flag: "🇯🇵" },
-  { code: "ko", name: "Korean", flag: "🇰🇷" },
-  { code: "zh", name: "Chinese", flag: "🇨🇳" },
-  { code: "ar", name: "Arabic", flag: "🇸🇦" },
-  { code: "hi", name: "Hindi", flag: "🇮🇳" },
-  { code: "ru", name: "Russian", flag: "🇷🇺" },
-];
-
-const levels = [
-  { id: "beginner", name: "Beginner", description: "Just starting out", xp: 0, icon: "🌱" },
-  { id: "intermediate", name: "Intermediate", description: "Building fluency", xp: 100, icon: "🌿" },
-  { id: "advanced", name: "Advanced", description: "Near native", xp: 500, icon: "🌳" },
-];
-
+// Learning Mode Types
+type LearningMode = "ielts" | "german" | "general";
+type IELTSSkill = "speaking" | "writing" | "reading" | "listening";
+type GermanLevel = "A1" | "A2" | "B1" | "B2" | "C1";
 type ActivityType = "fill_blank" | "choose_option" | "translate" | "yes_no" | "type_sentence" | "speaking";
 
 interface Activity {
@@ -45,6 +33,7 @@ interface Activity {
   options?: string[];
   correctAnswer?: string;
   isSpeaking?: boolean;
+  feedbackType?: "ielts" | "german" | "general";
 }
 
 interface Message {
@@ -54,6 +43,35 @@ interface Message {
   isCorrect?: boolean;
   feedback?: string;
 }
+
+interface IELTSFeedback {
+  fluency: number;
+  vocabulary: number;
+  grammar: number;
+  pronunciation: number;
+  suggestion: string;
+}
+
+const learningModes = [
+  { id: "ielts" as const, label: "IELTS Preparation", icon: GraduationCap, description: "Speaking, Writing, Reading, Listening", color: "from-blue-500 to-indigo-500" },
+  { id: "german" as const, label: "German Goethe Exam", icon: Globe, description: "A1 to C1 Level Preparation", color: "from-amber-500 to-orange-500" },
+  { id: "general" as const, label: "General English", icon: MessageCircle, description: "Daily practice & confidence", color: "from-emerald-500 to-teal-500" },
+];
+
+const germanLevels: { id: GermanLevel; name: string; description: string }[] = [
+  { id: "A1", name: "A1 - Beginner", description: "Basic phrases & greetings" },
+  { id: "A2", name: "A2 - Elementary", description: "Simple conversations" },
+  { id: "B1", name: "B1 - Intermediate", description: "Independent speaker" },
+  { id: "B2", name: "B2 - Upper Intermediate", description: "Complex discussions" },
+  { id: "C1", name: "C1 - Advanced", description: "Near-native fluency" },
+];
+
+const ieltsSkills: { id: IELTSSkill; name: string; icon: any }[] = [
+  { id: "speaking", name: "Speaking", icon: Mic },
+  { id: "writing", name: "Writing", icon: FileText },
+  { id: "reading", name: "Reading", icon: BookOpen },
+  { id: "listening", name: "Listening", icon: Volume2 },
+];
 
 const encouragements = [
   "Great job! 🎉",
@@ -72,8 +90,13 @@ const corrections = [
 ];
 
 const LanguageLearning = () => {
-  const [language, setLanguage] = useState("de");
-  const [level, setLevel] = useState("beginner");
+  // Mode & Setup State
+  const [selectedMode, setSelectedMode] = useState<LearningMode | null>(null);
+  const [germanLevel, setGermanLevel] = useState<GermanLevel>("A1");
+  const [ieltsSkill, setIeltsSkill] = useState<IELTSSkill>("speaking");
+  const [ieltsPart, setIeltsPart] = useState(1);
+  
+  // Session State
   const [isStarted, setIsStarted] = useState(false);
   const [conversation, setConversation] = useState<Message[]>([]);
   const [status, setStatus] = useState<"idle" | "listening" | "thinking" | "speaking">("idle");
@@ -87,14 +110,19 @@ const LanguageLearning = () => {
   const [isCorrectAnswer, setIsCorrectAnswer] = useState(false);
   const [activityCount, setActivityCount] = useState(0);
   const [isSpeakingMode, setIsSpeakingMode] = useState(false);
+  const [talkOnlyMode, setTalkOnlyMode] = useState(false);
+  const [slowMode, setSlowMode] = useState(false);
+  
+  // Voice Control State - Critical for single sentence capture
+  const [voiceProcessed, setVoiceProcessed] = useState(false);
+  const [pendingVoiceInput, setPendingVoiceInput] = useState<string | null>(null);
+  const voiceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { sendMessage, isLoading, currentResponse, clearHistory } = useChat();
   const { isListening, transcript, startListening, stopListening, resetTranscript, isSupported } = useSpeechRecognition();
   const { speak, stop: stopSpeaking, isSpeaking, isLoading: isTTSLoading } = useElevenLabsTTS();
-
-  const selectedLanguage = languages.find((l) => l.code === language);
-  const selectedLevel = levels.find((l) => l.id === level);
 
   // Auto-scroll
   useEffect(() => {
@@ -111,15 +139,103 @@ const LanguageLearning = () => {
     else setStatus("idle");
   }, [isListening, isLoading, isSpeaking, isTTSLoading]);
 
-  // Handle voice input completion for speaking activities
+  // Critical: Single sentence voice capture with auto-stop
   useEffect(() => {
-    if (!isListening && transcript.trim() && isStarted && isSpeakingMode) {
-      handleSpeakingAnswer(transcript.trim());
-      resetTranscript();
+    if (isListening && transcript.trim() && !voiceProcessed) {
+      // Clear any existing timeout
+      if (voiceTimeoutRef.current) {
+        clearTimeout(voiceTimeoutRef.current);
+      }
+      
+      // Set pending input
+      setPendingVoiceInput(transcript.trim());
+      
+      // Auto-stop after 2 seconds of silence
+      voiceTimeoutRef.current = setTimeout(() => {
+        if (transcript.trim()) {
+          stopListening();
+          setVoiceProcessed(true);
+        }
+      }, 2000);
     }
-  }, [isListening, isStarted, isSpeakingMode]);
+  }, [transcript, isListening, voiceProcessed, stopListening]);
+
+  // Process voice input after stopping
+  useEffect(() => {
+    if (!isListening && pendingVoiceInput && voiceProcessed && isStarted) {
+      handleVoiceAnswer(pendingVoiceInput);
+      setPendingVoiceInput(null);
+      resetTranscript();
+      
+      // Reset for next voice input
+      setTimeout(() => {
+        setVoiceProcessed(false);
+      }, 500);
+    }
+  }, [isListening, pendingVoiceInput, voiceProcessed, isStarted]);
+
+  // Cleanup voice timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (voiceTimeoutRef.current) {
+        clearTimeout(voiceTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const getModeSystemPrompt = (): string => {
+    if (selectedMode === "ielts") {
+      if (ieltsSkill === "speaking") {
+        return `You are an IELTS Speaking examiner. Follow the official IELTS format strictly.
+
+Current Part: ${ieltsPart}
+${ieltsPart === 1 ? "Part 1: Ask simple questions about familiar topics (work, study, hobbies, family). 4-5 minutes." : ""}
+${ieltsPart === 2 ? "Part 2: Give a cue card topic. User must speak for 1-2 minutes." : ""}
+${ieltsPart === 3 ? "Part 3: Ask deeper discussion questions related to Part 2 topic." : ""}
+
+After each response, provide brief feedback on:
+- Fluency & Coherence
+- Vocabulary
+- Grammar
+- Pronunciation
+Then suggest how to improve band score.`;
+      } else if (ieltsSkill === "writing") {
+        return `You are an IELTS Writing examiner. Help with Task 1 (graphs/charts) or Task 2 (essays).
+Teach structure: Introduction → Body → Conclusion.
+Correct mistakes gently and show higher band sample answers.`;
+      }
+      return `You are an IELTS ${ieltsSkill} tutor. Follow official IELTS format. Difficulty matches band 5.0-7.5+.`;
+    }
+    
+    if (selectedMode === "german") {
+      return `You are a German Goethe Exam tutor for ${germanLevel} level.
+
+Skills: Sprechen, Hören, Lesen, Schreiben
+- Start with simple German appropriate for ${germanLevel}
+- English explanations allowed when needed
+- Focus on: pronunciation, sentence structure, daily scenarios
+- Role-play scenarios: office, doctor, travel, shopping
+
+Always respond in German first, then provide English help if needed.
+Encourage the user warmly after every attempt.`;
+    }
+    
+    return `You are a Duolingo-style English tutor. Focus on:
+- Daily conversation
+- Vocabulary building
+- Grammar practice
+- Speaking confidence
+
+Keep lessons SHORT and FUN. One concept at a time.
+Use activities: fill blanks, choose option, translate, speak.`;
+  };
 
   const startSession = async () => {
+    if (!selectedMode) {
+      toast.error("Please select a learning mode first");
+      return;
+    }
+
     clearHistory();
     setConversation([]);
     setSessionXP(0);
@@ -128,13 +244,26 @@ const LanguageLearning = () => {
     setActivityCount(0);
     setIsStarted(true);
     setIsSpeakingMode(false);
+    setIeltsPart(1);
+    setVoiceProcessed(false);
+    setPendingVoiceInput(null);
 
-    const greeting = `🎉 Welcome to your ${selectedLanguage?.name} lesson!\n\nI'm your Duolingo-style language coach. We'll learn step-by-step with fun activities!\n\nLet's start with something simple. Ready? 💪`;
+    let greeting = "";
+    
+    if (selectedMode === "ielts") {
+      greeting = `🎓 Welcome to IELTS ${ieltsSkill.charAt(0).toUpperCase() + ieltsSkill.slice(1)} Practice!\n\nI'll help you prepare exactly like the real exam. Let's start with Part 1.\n\nReady? 💪`;
+    } else if (selectedMode === "german") {
+      greeting = `🇩🇪 Willkommen! Welcome to German ${germanLevel} Practice!\n\nI'm your Goethe exam coach. We'll practice Sprechen, Hören, Lesen, and Schreiben.\n\nLass uns anfangen! (Let's begin!) 🎯`;
+    } else {
+      greeting = `🎉 Welcome to your English Practice Session!\n\nI'm your Duolingo-style coach. We'll learn step-by-step with fun activities!\n\nReady to start? 💪`;
+    }
 
     setConversation([{ id: crypto.randomUUID(), role: "ai", text: greeting }]);
-    speak(greeting);
     
-    // Generate first activity after greeting
+    if (!slowMode) {
+      speak(greeting);
+    }
+    
     setTimeout(() => generateNextActivity(), 2000);
   };
 
@@ -143,37 +272,48 @@ const LanguageLearning = () => {
     setUserAnswer("");
     setCurrentActivity(null);
     
-    const activityTypes: ActivityType[] = ["fill_blank", "choose_option", "translate", "yes_no", "type_sentence", "speaking"];
-    const randomType = activityTypes[Math.floor(Math.random() * activityTypes.length)];
+    const activityTypes: ActivityType[] = selectedMode === "ielts" && ieltsSkill === "speaking" 
+      ? ["speaking"] 
+      : ["fill_blank", "choose_option", "translate", "yes_no", "type_sentence", "speaking"];
     
-    // Activate speaking mode more frequently
-    const shouldSpeak = randomType === "speaking" || (activityCount > 0 && activityCount % 3 === 0);
+    const randomType = activityTypes[Math.floor(Math.random() * activityTypes.length)];
+    const shouldSpeak = randomType === "speaking" || talkOnlyMode || (activityCount > 0 && activityCount % 3 === 0);
     setIsSpeakingMode(shouldSpeak);
 
-    const systemPrompt = `You are a Duolingo-style ${selectedLanguage?.name} language tutor for ${level} level.
-
-Generate ONE simple activity. Return ONLY valid JSON in this exact format:
-{
-  "type": "${randomType}",
-  "instruction": "Brief instruction in English",
-  "content": "The question or prompt",
-  "options": ["option1", "option2", "option3"] (only for choose_option or fill_blank),
-  "correctAnswer": "The correct answer"
-}
-
-Rules:
-- Keep it SHORT and simple for ${level} level
-- Use common vocabulary
-- For fill_blank: Use ___ for the blank
-- For speaking: Ask user to repeat a simple phrase
-- For translate: Give a simple sentence to translate
-- For yes_no: Ask if a sentence is correct
-- Make it fun and engaging
-
-Language: ${selectedLanguage?.name}`;
+    const systemPrompt = getModeSystemPrompt();
 
     try {
-      const response = await sendMessage(`Generate a ${randomType} activity for ${selectedLanguage?.name} ${level} level`, "studybuddy", {
+      let activityPrompt = "";
+      
+      if (selectedMode === "ielts" && ieltsSkill === "speaking") {
+        activityPrompt = `Generate an IELTS Speaking Part ${ieltsPart} question. Return JSON:
+{
+  "type": "speaking",
+  "instruction": "${ieltsPart === 2 ? "Here's your cue card. Speak for 1-2 minutes." : "Please answer this question."}",
+  "content": "The question or cue card topic",
+  "correctAnswer": "A model answer for band 7+"
+}`;
+      } else if (selectedMode === "german") {
+        activityPrompt = `Generate a German ${germanLevel} activity. Return JSON:
+{
+  "type": "${randomType}",
+  "instruction": "Brief instruction",
+  "content": "German question or prompt",
+  "options": ["option1", "option2", "option3"] (if applicable),
+  "correctAnswer": "The correct answer"
+}`;
+      } else {
+        activityPrompt = `Generate a ${randomType} activity. Return JSON:
+{
+  "type": "${randomType}",
+  "instruction": "Brief instruction",
+  "content": "The question",
+  "options": ["option1", "option2", "option3"] (if applicable),
+  "correctAnswer": "The correct answer"
+}`;
+      }
+
+      const response = await sendMessage(activityPrompt, "studybuddy", {
         conversationContext: systemPrompt,
       });
 
@@ -181,20 +321,23 @@ Language: ${selectedLanguage?.name}`;
       if (jsonMatch) {
         const activity = JSON.parse(jsonMatch[0]) as Activity;
         activity.isSpeaking = shouldSpeak;
+        activity.feedbackType = selectedMode || "general";
         setCurrentActivity(activity);
         
         const activityMessage = formatActivityMessage(activity, shouldSpeak);
         setConversation(prev => [...prev, { id: crypto.randomUUID(), role: "ai", text: activityMessage }]);
-        speak(activity.instruction + ". " + activity.content);
+        
+        if (!slowMode) {
+          speak(activity.instruction + ". " + activity.content);
+        }
       }
     } catch (error) {
       console.error("Activity generation error:", error);
-      // Fallback activity
       const fallback: Activity = {
         type: "translate",
         instruction: "Translate this sentence",
-        content: selectedLanguage?.code === "de" ? "Guten Tag" : "Hello",
-        correctAnswer: selectedLanguage?.code === "de" ? "Good day" : "Hola",
+        content: selectedMode === "german" ? "Guten Tag" : "Hello, how are you?",
+        correctAnswer: selectedMode === "german" ? "Good day" : "Hola, ¿cómo estás?",
         isSpeaking: shouldSpeak
       };
       setCurrentActivity(fallback);
@@ -223,12 +366,50 @@ Language: ${selectedLanguage?.name}`;
     }
 
     if (isSpeaking) {
-      message += "🎤 **Please speak your answer!**";
+      message += "🎤 **Tap speak and say ONE sentence.**\n_(I'll listen for 2-3 seconds)_";
     } else if (activity.type === "type_sentence") {
       message += "⌨️ Type your answer below";
     }
 
     return message;
+  };
+
+  const getIELTSFeedback = async (answer: string): Promise<string> => {
+    const feedbackPrompt = `Rate this IELTS Speaking response and provide feedback:
+
+User's answer: "${answer}"
+
+Provide JSON feedback:
+{
+  "fluency": 6,
+  "vocabulary": 5,
+  "grammar": 6,
+  "pronunciation": 7,
+  "overallBand": 6,
+  "suggestion": "Specific improvement tip"
+}`;
+
+    try {
+      const response = await sendMessage(feedbackPrompt, "studybuddy", {
+        conversationContext: getModeSystemPrompt(),
+      });
+      
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const feedback = JSON.parse(jsonMatch[0]);
+        return `📊 **IELTS Feedback:**\n\n` +
+          `• Fluency: ${feedback.fluency}/9\n` +
+          `• Vocabulary: ${feedback.vocabulary}/9\n` +
+          `• Grammar: ${feedback.grammar}/9\n` +
+          `• Pronunciation: ${feedback.pronunciation}/9\n\n` +
+          `**Estimated Band: ${feedback.overallBand}**\n\n` +
+          `💡 ${feedback.suggestion}`;
+      }
+    } catch (e) {
+      console.error("Feedback error:", e);
+    }
+    
+    return "Good attempt! Keep practicing to improve your band score.";
   };
 
   const checkAnswer = async (answer: string) => {
@@ -238,54 +419,89 @@ Language: ${selectedLanguage?.name}`;
     const normalizedAnswer = answer.toLowerCase().trim();
     const normalizedCorrect = currentActivity.correctAnswer?.toLowerCase().trim() || "";
     
-    // Flexible matching
-    const isCorrect = normalizedAnswer === normalizedCorrect || 
-                      normalizedCorrect.includes(normalizedAnswer) ||
-                      normalizedAnswer.includes(normalizedCorrect) ||
-                      (currentActivity.options && 
-                       currentActivity.options.some(opt => 
-                         opt.toLowerCase().includes(normalizedAnswer) && 
-                         opt.toLowerCase() === normalizedCorrect));
-
-    setIsCorrectAnswer(isCorrect);
-    
-    if (isCorrect) {
-      const xpGain = isSpeakingMode ? 20 : 15;
+    // For IELTS speaking, we provide detailed feedback instead of right/wrong
+    if (selectedMode === "ielts" && ieltsSkill === "speaking") {
+      const feedback = await getIELTSFeedback(answer);
+      setIsCorrectAnswer(true);
+      const xpGain = 20;
       setSessionXP(prev => prev + xpGain);
-      setLessonProgress(prev => Math.min(prev + 15, 100));
+      setLessonProgress(prev => Math.min(prev + 20, 100));
       setActivityCount(prev => prev + 1);
       
-      const encouragement = encouragements[Math.floor(Math.random() * encouragements.length)];
-      const feedbackMsg = `${encouragement}\n\n+${xpGain} XP 🌟`;
-      
       setConversation(prev => [...prev, 
         { id: crypto.randomUUID(), role: "user", text: answer },
-        { id: crypto.randomUUID(), role: "ai", text: feedbackMsg, isCorrect: true }
+        { id: crypto.randomUUID(), role: "ai", text: feedback + `\n\n+${xpGain} XP 🌟`, isCorrect: true }
       ]);
-      speak(encouragement);
+      
+      if (!slowMode) {
+        speak("Good effort! Here's your feedback.");
+      }
+      
+      // Progress to next part after several questions
+      if (activityCount > 0 && activityCount % 3 === 0 && ieltsPart < 3) {
+        setIeltsPart(prev => prev + 1);
+      }
     } else {
-      setHearts(prev => Math.max(prev - 1, 0));
-      const correction = corrections[Math.floor(Math.random() * corrections.length)];
-      const feedbackMsg = `${correction}\n\nThe correct answer was: **${currentActivity.correctAnswer}**`;
+      // Standard correct/incorrect checking
+      const isCorrect = normalizedAnswer === normalizedCorrect || 
+                        normalizedCorrect.includes(normalizedAnswer) ||
+                        normalizedAnswer.includes(normalizedCorrect) ||
+                        (currentActivity.options && 
+                         currentActivity.options.some(opt => 
+                           opt.toLowerCase().includes(normalizedAnswer) && 
+                           opt.toLowerCase() === normalizedCorrect));
+
+      setIsCorrectAnswer(isCorrect);
       
-      setConversation(prev => [...prev, 
-        { id: crypto.randomUUID(), role: "user", text: answer },
-        { id: crypto.randomUUID(), role: "ai", text: feedbackMsg, isCorrect: false }
-      ]);
-      speak(correction);
+      if (isCorrect) {
+        const xpGain = isSpeakingMode ? 15 : 10;
+        setSessionXP(prev => prev + xpGain);
+        setLessonProgress(prev => Math.min(prev + 15, 100));
+        setActivityCount(prev => prev + 1);
+        
+        const encouragement = encouragements[Math.floor(Math.random() * encouragements.length)];
+        const feedbackMsg = `${encouragement}\n\n+${xpGain} XP 🌟`;
+        
+        setConversation(prev => [...prev, 
+          { id: crypto.randomUUID(), role: "user", text: answer },
+          { id: crypto.randomUUID(), role: "ai", text: feedbackMsg, isCorrect: true }
+        ]);
+        
+        if (!slowMode) {
+          speak(encouragement);
+        }
+      } else {
+        setHearts(prev => Math.max(prev - 1, 0));
+        const correction = corrections[Math.floor(Math.random() * corrections.length)];
+        const feedbackMsg = `${correction}\n\nThe correct answer was: **${currentActivity.correctAnswer}**`;
+        
+        setConversation(prev => [...prev, 
+          { id: crypto.randomUUID(), role: "user", text: answer },
+          { id: crypto.randomUUID(), role: "ai", text: feedbackMsg, isCorrect: false }
+        ]);
+        
+        if (!slowMode) {
+          speak(correction);
+        }
+      }
     }
 
     // Continue to next activity after delay
     setTimeout(() => {
-      if (lessonProgress >= 100 || activityCount >= 6) {
+      if (lessonProgress >= 100 || activityCount >= 8) {
         endSession();
+      } else if (hearts === 0) {
+        // Slow revision mode when out of hearts
+        toast.info("Switching to slow revision mode");
+        setSlowMode(true);
+        generateNextActivity();
       } else {
         generateNextActivity();
       }
     }, 2500);
   };
 
-  const handleSpeakingAnswer = (spokenText: string) => {
+  const handleVoiceAnswer = (spokenText: string) => {
     setUserAnswer(spokenText);
     checkAnswer(spokenText);
     setIsSpeakingMode(false);
@@ -305,13 +521,24 @@ Language: ${selectedLanguage?.name}`;
   const toggleListening = useCallback(() => {
     if (!isSupported) {
       toast.error("Voice input not supported in your browser");
+      setIsSpeakingMode(false);
       return;
     }
+    
     if (isListening) {
       stopListening();
     } else {
       stopSpeaking();
+      setVoiceProcessed(false);
+      setPendingVoiceInput(null);
       startListening();
+      
+      // Auto-stop after 5 seconds max
+      setTimeout(() => {
+        if (isListening) {
+          stopListening();
+        }
+      }, 5000);
     }
   }, [isListening, isSupported, startListening, stopListening, stopSpeaking]);
 
@@ -329,13 +556,14 @@ Language: ${selectedLanguage?.name}`;
     setCurrentActivity(null);
     setIsSpeakingMode(false);
     
-    const finalMessage = `🎉 Lesson Complete!\n\nYou earned ${sessionXP} XP today!\n\nKeep up your ${streak} day streak! 🔥`;
+    const finalMessage = `🎉 Lesson Complete!\n\nYou earned ${sessionXP} XP today!\n\n🔥 ${streak} day streak! Keep going!`;
     setConversation(prev => [...prev, { id: crypto.randomUUID(), role: "ai", text: finalMessage }]);
     toast.success(`Session complete! You earned ${sessionXP} XP`);
     
     setTimeout(() => {
       setConversation([]);
       clearHistory();
+      setSelectedMode(null);
     }, 3000);
   };
 
@@ -354,23 +582,24 @@ Language: ${selectedLanguage?.name}`;
               <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-success to-emerald-400 flex items-center justify-center">
                 <BookOpen className="h-4 w-4 text-white" />
               </div>
-              <h1 className="text-lg font-semibold">Language Coach</h1>
+              <h1 className="text-lg font-semibold">
+                {selectedMode === "ielts" ? "IELTS Coach" : 
+                 selectedMode === "german" ? "German Coach" : 
+                 selectedMode === "general" ? "English Coach" : "Language Coach"}
+              </h1>
             </div>
           </div>
 
           {isStarted && (
             <div className="flex items-center gap-3">
-              {/* Hearts */}
               <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-destructive/10">
                 <Heart className="h-4 w-4 text-destructive fill-destructive" />
                 <span className="text-sm font-medium text-destructive">{hearts}</span>
               </div>
-              {/* Streak */}
               <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-warning/10 text-warning">
                 <Flame className="h-4 w-4" />
                 <span className="text-sm font-medium">{streak}</span>
               </div>
-              {/* XP */}
               <div className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-primary/10 text-primary">
                 <Zap className="h-4 w-4" />
                 <span className="text-sm font-medium">{sessionXP}</span>
@@ -381,14 +610,13 @@ Language: ${selectedLanguage?.name}`;
       </header>
 
       <main className="flex-1 flex flex-col items-center p-4 md:p-6">
-        {!isStarted ? (
-          /* Setup Screen - Duolingo inspired */
+        {!selectedMode ? (
+          /* Mode Selection Screen */
           <motion.div
-            className="w-full max-w-lg flex-1 flex flex-col"
+            className="w-full max-w-2xl flex-1 flex flex-col"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            {/* Hero */}
             <div className="text-center py-8">
               <motion.div
                 initial={{ scale: 0 }}
@@ -396,95 +624,162 @@ Language: ${selectedLanguage?.name}`;
                 transition={{ type: "spring", bounce: 0.5 }}
                 className="w-28 h-28 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-success via-emerald-400 to-teal-400 flex items-center justify-center shadow-glow"
               >
-                <Globe className="w-14 h-14 text-white" />
+                <GraduationCap className="w-14 h-14 text-white" />
               </motion.div>
-              <h2 className="text-3xl font-bold mb-3">Learn a Language!</h2>
+              <h2 className="text-3xl font-bold mb-3">Which mode do you want?</h2>
               <p className="text-muted-foreground text-lg">
-                Duolingo-style lessons with a speaking tutor
+                Choose your learning path
               </p>
             </div>
 
+            <div className="space-y-4">
+              {learningModes.map((mode, index) => {
+                const Icon = mode.icon;
+                return (
+                  <motion.button
+                    key={mode.id}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    onClick={() => setSelectedMode(mode.id)}
+                    className="w-full p-6 rounded-2xl glass-card hover:scale-[1.02] transition-all text-left group"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${mode.color} flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform`}>
+                        <Icon className="w-7 h-7 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-xl font-semibold mb-1">{mode.label}</h3>
+                        <p className="text-muted-foreground">{mode.description}</p>
+                      </div>
+                      <ArrowLeft className="w-5 h-5 rotate-180 text-muted-foreground group-hover:text-primary transition-colors" />
+                    </div>
+                  </motion.button>
+                );
+              })}
+            </div>
+          </motion.div>
+        ) : !isStarted ? (
+          /* Setup Screen */
+          <motion.div
+            className="w-full max-w-lg flex-1 flex flex-col"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <Button
+              variant="ghost"
+              className="self-start mb-4"
+              onClick={() => setSelectedMode(null)}
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to modes
+            </Button>
+
+            <div className="text-center py-6">
+              <h2 className="text-2xl font-bold mb-2">
+                {selectedMode === "ielts" ? "IELTS Preparation" :
+                 selectedMode === "german" ? "German Goethe Exam" :
+                 "General English Practice"}
+              </h2>
+              <p className="text-muted-foreground">Configure your session</p>
+            </div>
+
             {/* Stats Preview */}
-            <div className="grid grid-cols-3 gap-3 mb-8">
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-                className="glass-card rounded-2xl p-4 text-center hover:scale-105 transition-transform"
-              >
+            <div className="grid grid-cols-3 gap-3 mb-6">
+              <div className="glass-card rounded-2xl p-4 text-center">
                 <Flame className="h-6 w-6 mx-auto mb-2 text-warning" />
                 <p className="text-2xl font-bold">{streak}</p>
                 <p className="text-xs text-muted-foreground">Day Streak</p>
-              </motion.div>
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className="glass-card rounded-2xl p-4 text-center hover:scale-105 transition-transform"
-              >
-                <Trophy className="h-6 w-6 mx-auto mb-2 text-primary" />
-                <p className="text-2xl font-bold">12</p>
-                <p className="text-xs text-muted-foreground">Lessons</p>
-              </motion.div>
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-                className="glass-card rounded-2xl p-4 text-center hover:scale-105 transition-transform"
-              >
-                <Target className="h-6 w-6 mx-auto mb-2 text-success" />
-                <p className="text-2xl font-bold">85%</p>
-                <p className="text-xs text-muted-foreground">Accuracy</p>
-              </motion.div>
+              </div>
+              <div className="glass-card rounded-2xl p-4 text-center">
+                <Heart className="h-6 w-6 mx-auto mb-2 text-destructive" />
+                <p className="text-2xl font-bold">{hearts}</p>
+                <p className="text-xs text-muted-foreground">Hearts</p>
+              </div>
+              <div className="glass-card rounded-2xl p-4 text-center">
+                <Zap className="h-6 w-6 mx-auto mb-2 text-primary" />
+                <p className="text-2xl font-bold">{sessionXP}</p>
+                <p className="text-xs text-muted-foreground">XP Today</p>
+              </div>
             </div>
 
-            {/* Selection */}
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              className="glass-card rounded-3xl p-6 space-y-6"
-            >
-              <div>
-                <label className="text-sm font-medium text-muted-foreground mb-3 block">
-                  I want to learn
-                </label>
-                <Select value={language} onValueChange={setLanguage}>
-                  <SelectTrigger className="h-14 rounded-2xl text-lg">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {languages.map((lang) => (
-                      <SelectItem key={lang.code} value={lang.code}>
-                        <span className="flex items-center gap-3">
-                          <span className="text-xl">{lang.flag}</span>
-                          <span>{lang.name}</span>
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="glass-card rounded-3xl p-6 space-y-6">
+              {/* IELTS Skill Selection */}
+              {selectedMode === "ielts" && (
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground mb-3 block">
+                    Select IELTS Skill
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {ieltsSkills.map((skill) => {
+                      const Icon = skill.icon;
+                      return (
+                        <button
+                          key={skill.id}
+                          onClick={() => setIeltsSkill(skill.id)}
+                          className={`p-4 rounded-xl border-2 transition-all flex items-center gap-3 ${
+                            ieltsSkill === skill.id
+                              ? "border-primary bg-primary/10"
+                              : "border-border/50 hover:border-border"
+                          }`}
+                        >
+                          <Icon className="w-5 h-5" />
+                          <span className="font-medium">{skill.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
-              <div>
-                <label className="text-sm font-medium text-muted-foreground mb-3 block">
-                  My current level
+              {/* German Level Selection */}
+              {selectedMode === "german" && (
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground mb-3 block">
+                    Select Your Level
+                  </label>
+                  <Select value={germanLevel} onValueChange={(v) => setGermanLevel(v as GermanLevel)}>
+                    <SelectTrigger className="h-14 rounded-2xl text-lg">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {germanLevels.map((lvl) => (
+                        <SelectItem key={lvl.id} value={lvl.id}>
+                          <span className="flex flex-col">
+                            <span className="font-medium">{lvl.name}</span>
+                            <span className="text-xs text-muted-foreground">{lvl.description}</span>
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Mode Options */}
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-muted-foreground block">
+                  Session Options
                 </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {levels.map((lvl) => (
-                    <button
-                      key={lvl.id}
-                      onClick={() => setLevel(lvl.id)}
-                      className={`p-3 rounded-xl border-2 transition-all text-center ${
-                        level === lvl.id
-                          ? "border-success bg-success/10"
-                          : "border-border/50 hover:border-border"
-                      }`}
-                    >
-                      <span className="text-2xl block mb-1">{lvl.icon}</span>
-                      <span className="text-sm font-medium block">{lvl.name}</span>
-                    </button>
-                  ))}
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setTalkOnlyMode(!talkOnlyMode)}
+                    className={`px-4 py-2 rounded-xl border-2 text-sm font-medium transition-all flex items-center gap-2 ${
+                      talkOnlyMode ? "border-primary bg-primary/10 text-primary" : "border-border/50"
+                    }`}
+                  >
+                    <Mic className="w-4 h-4" />
+                    Talk-Only Mode
+                  </button>
+                  <button
+                    onClick={() => setSlowMode(!slowMode)}
+                    className={`px-4 py-2 rounded-xl border-2 text-sm font-medium transition-all flex items-center gap-2 ${
+                      slowMode ? "border-primary bg-primary/10 text-primary" : "border-border/50"
+                    }`}
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    Slow Mode
+                  </button>
                 </div>
               </div>
 
@@ -495,7 +790,7 @@ Language: ${selectedLanguage?.name}`;
                 <Sparkles className="w-5 h-5 mr-2" />
                 Start Lesson
               </Button>
-            </motion.div>
+            </div>
           </motion.div>
         ) : (
           /* Lesson Screen */
@@ -508,8 +803,11 @@ Language: ${selectedLanguage?.name}`;
             <div className="mb-4">
               <div className="flex items-center justify-between text-sm mb-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-2xl">{selectedLanguage?.flag}</span>
-                  <span className="font-medium">{selectedLanguage?.name}</span>
+                  <span className="font-medium">
+                    {selectedMode === "ielts" ? `IELTS ${ieltsSkill} - Part ${ieltsPart}` :
+                     selectedMode === "german" ? `German ${germanLevel}` :
+                     "English Practice"}
+                  </span>
                 </div>
                 <Button variant="outline" size="sm" onClick={endSession} className="rounded-xl">
                   End Lesson
@@ -554,7 +852,6 @@ Language: ${selectedLanguage?.name}`;
                   ))}
                 </AnimatePresence>
 
-                {/* Streaming response */}
                 {currentResponse && (
                   <motion.div
                     initial={{ opacity: 0 }}
@@ -576,7 +873,6 @@ Language: ${selectedLanguage?.name}`;
                 animate={{ opacity: 1, y: 0 }}
                 className="mb-4 p-4 rounded-2xl glass-card"
               >
-                {/* Multiple choice options */}
                 {currentActivity.options && currentActivity.options.length > 0 && !isSpeakingMode && (
                   <div className="grid grid-cols-2 gap-2">
                     {currentActivity.options.map((option, i) => (
@@ -595,7 +891,6 @@ Language: ${selectedLanguage?.name}`;
                   </div>
                 )}
 
-                {/* Text input for type activities */}
                 {!currentActivity.options && !isSpeakingMode && (
                   <div className="flex gap-2">
                     <Input
@@ -615,16 +910,20 @@ Language: ${selectedLanguage?.name}`;
                   </div>
                 )}
 
-                {/* Speaking mode prompt */}
                 {isSpeakingMode && (
                   <div className="text-center py-4">
                     <div className="flex items-center justify-center gap-2 text-primary mb-2">
                       <Mic className="w-5 h-5 animate-pulse" />
-                      <span className="font-medium">Speak your answer</span>
+                      <span className="font-medium">Tap speak and say ONE sentence</span>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      Tap the microphone and say your answer
+                      I'll listen for 2-3 seconds then stop
                     </p>
+                    {pendingVoiceInput && (
+                      <div className="mt-3 p-2 rounded-xl bg-muted/50">
+                        <p className="text-sm">Heard: "{pendingVoiceInput}"</p>
+                      </div>
+                    )}
                   </div>
                 )}
               </motion.div>
@@ -650,7 +949,7 @@ Language: ${selectedLanguage?.name}`;
                   )}
                   <div>
                     <p className={`font-semibold ${isCorrectAnswer ? "text-success" : "text-destructive"}`}>
-                      {isCorrectAnswer ? "Correct!" : "Not quite..."}
+                      {isCorrectAnswer ? "Great job!" : "Not quite..."}
                     </p>
                     {!isCorrectAnswer && currentActivity?.correctAnswer && (
                       <p className="text-sm text-muted-foreground">
@@ -705,11 +1004,11 @@ Language: ${selectedLanguage?.name}`;
                 <Button
                   variant="outline"
                   size="icon"
-                  className={`w-12 h-12 rounded-full ${isSpeakingMode ? "bg-primary/20 border-primary" : ""}`}
-                  onClick={() => setIsSpeakingMode(!isSpeakingMode)}
-                  title="Speaking mode"
+                  className={`w-12 h-12 rounded-full ${talkOnlyMode ? "bg-primary/20 border-primary" : ""}`}
+                  onClick={() => setTalkOnlyMode(!talkOnlyMode)}
+                  title="Talk-only mode"
                 >
-                  <Mic className="w-5 h-5" />
+                  <MessageCircle className="w-5 h-5" />
                 </Button>
               </div>
             </div>
