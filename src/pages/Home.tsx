@@ -23,9 +23,9 @@ import { toast } from "sonner";
 const features = [
   {
     id: "search",
-    title: "Talk to AI",
-    subtitle: "ChatGPT-style Intelligence",
-    description: "Ask anything. Get intelligent, conversational answers instantly with voice or text.",
+    title: "AI Search",
+    subtitle: "Smart Answers",
+    description: "Ask questions, explore topics, and get smart answers using text or voice.",
     icon: MessageSquare,
     path: "/search",
     gradient: "from-cyan-400 via-teal-400 to-emerald-400",
@@ -35,8 +35,8 @@ const features = [
   {
     id: "language",
     title: "Learn Languages",
-    subtitle: "Duolingo-style Learning",
-    description: "Master any language with interactive speaking practice and real-time feedback.",
+    subtitle: "Interactive Learning",
+    description: "Practice speaking and learning languages step-by-step with interactive lessons.",
     icon: Globe,
     path: "/language",
     gradient: "from-violet-400 via-purple-400 to-fuchsia-400",
@@ -46,8 +46,8 @@ const features = [
   {
     id: "interview",
     title: "Interview Practice",
-    subtitle: "Real Interview Simulation",
-    description: "Prepare for your dream job with AI-powered mock interviews and instant feedback.",
+    subtitle: "Career Preparation",
+    description: "Practice real interview questions and improve confidence with AI feedback.",
     icon: Briefcase,
     path: "/interview",
     gradient: "from-amber-400 via-orange-400 to-rose-400",

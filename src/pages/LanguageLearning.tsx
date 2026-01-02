@@ -58,7 +58,7 @@ interface IELTSFeedback {
 const learningModes = [
   { id: "ielts" as const, label: "IELTS Preparation", icon: GraduationCap, description: "Speaking, Writing, Reading, Listening", color: "from-blue-500 to-indigo-500" },
   { id: "german" as const, label: "German Goethe Exam", icon: Globe, description: "A1 to C1 Level Preparation", color: "from-amber-500 to-orange-500" },
-  { id: "general" as const, label: "General Practice", icon: MessageCircle, description: "Daily practice & confidence", color: "from-emerald-500 to-teal-500" },
+  { id: "general" as const, label: "General Language Practice", icon: MessageCircle, description: "Daily practice & confidence in any language", color: "from-emerald-500 to-teal-500" },
 ];
 
 const targetLanguages: { id: TargetLanguage; name: string; flag: string }[] = [
@@ -604,9 +604,9 @@ Provide JSON feedback:
 
       <main className="flex-1 flex flex-col items-center p-4 md:p-6">
         {!selectedMode ? (
-          /* Mode Selection Screen */
+          /* Language Selection Screen First */
           <motion.div
-            className="w-full max-w-2xl flex-1 flex flex-col"
+            className="w-full max-w-4xl flex-1 flex flex-col"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
           >
@@ -615,16 +615,43 @@ Provide JSON feedback:
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ type: "spring", bounce: 0.5 }}
-                className="w-28 h-28 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-success via-emerald-400 to-teal-400 flex items-center justify-center shadow-glow"
+                className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-success via-emerald-400 to-teal-400 flex items-center justify-center shadow-glow"
               >
-                <GraduationCap className="w-14 h-14 text-white" />
+                <Globe className="w-12 h-12 text-white" />
               </motion.div>
-              <h2 className="text-3xl font-bold mb-3">Which mode do you want?</h2>
+              <h2 className="text-3xl font-bold mb-3">Choose Your Language</h2>
               <p className="text-muted-foreground text-lg">
-                Choose your learning path
+                Select a language to start learning
               </p>
             </div>
 
+            {/* Language Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-8">
+              {targetLanguages.map((lang, index) => (
+                <motion.button
+                  key={lang.id}
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: index * 0.05 }}
+                  onClick={() => setTargetLanguage(lang.id)}
+                  className={`p-4 rounded-2xl glass-card hover:scale-105 transition-all text-center group ${
+                    targetLanguage === lang.id ? "ring-2 ring-primary bg-primary/10" : ""
+                  }`}
+                >
+                  <span className="text-4xl block mb-2">{lang.flag}</span>
+                  <span className="font-medium text-sm">{lang.name}</span>
+                  {targetLanguage === lang.id && (
+                    <motion.div
+                      layoutId="selected-lang"
+                      className="absolute inset-0 rounded-2xl border-2 border-primary pointer-events-none"
+                    />
+                  )}
+                </motion.button>
+              ))}
+            </div>
+
+            {/* Mode Selection */}
+            <h3 className="text-xl font-semibold mb-4 text-center">Choose Your Path</h3>
             <div className="space-y-4">
               {learningModes.map((mode, index) => {
                 const Icon = mode.icon;
@@ -633,7 +660,7 @@ Provide JSON feedback:
                     key={mode.id}
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.1 }}
+                    transition={{ delay: 0.3 + index * 0.1 }}
                     onClick={() => setSelectedMode(mode.id)}
                     className="w-full p-6 rounded-2xl glass-card hover:scale-[1.02] transition-all text-left group"
                   >
