@@ -914,8 +914,6 @@ Provide JSON feedback:
                     </p>
                   </div>
                 )}
-                  </div>
-                )}
               </motion.div>
             )}
 
