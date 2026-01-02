@@ -190,11 +190,13 @@ serve(async (req) => {
       });
     }
 
-    if (conversationContext && (typeof conversationContext !== "string" || conversationContext.length > 1000)) {
-      return new Response(JSON.stringify({ error: "Invalid conversationContext (max 1000 chars)" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    // Safely trim conversationContext if too long (keep last 1000 chars for most recent context)
+    let safeConversationContext = conversationContext;
+    if (conversationContext && typeof conversationContext === "string" && conversationContext.length > 1000) {
+      safeConversationContext = conversationContext.slice(-1000);
+      console.log(`[${requestId}] Trimmed conversationContext from ${conversationContext.length} to 1000 chars`);
+    } else if (conversationContext && typeof conversationContext !== "string") {
+      safeConversationContext = "";
     }
 
     const validModes = ["friend", "interviewer", "mentor", "studybuddy", "therapist", "language"];
@@ -224,8 +226,8 @@ serve(async (req) => {
     if (userName) {
       memoryContext += `\n\nThe user's name is ${userName}. Use their name occasionally (but not every message) to make the conversation more personal.`;
     }
-    if (conversationContext) {
-      memoryContext += `\n\nContext from earlier in this conversation: ${conversationContext}`;
+    if (safeConversationContext) {
+      memoryContext += `\n\nContext from earlier in this conversation: ${safeConversationContext}`;
     }
 
     const enhancedSystemPrompt = systemPrompt + memoryContext + emotionalAdjustment;
