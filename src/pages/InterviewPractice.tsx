@@ -9,13 +9,14 @@ import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import Avatar3D from "@/components/Avatar3D";
 import { useChat } from "@/hooks/useChat";
-import { useCleanSpeechRecognition } from "@/hooks/useCleanSpeechRecognition";
-import { useElevenLabsTTS } from "@/hooks/useElevenLabsTTS";
+import { useSingleSentenceRecognition } from "@/hooks/useSingleSentenceRecognition";
+import { useEnhancedTTS } from "@/hooks/useEnhancedTTS";
 import { useCamera } from "@/hooks/useCamera";
 import VoiceOrb from "@/components/VoiceOrb";
 import StatusIndicator from "@/components/StatusIndicator";
 import WaveformVisualizer from "@/components/WaveformVisualizer";
 import InterviewReport from "@/components/InterviewReport";
+import InterviewStages, { getInterviewStagePrompt } from "@/components/InterviewStages";
 import { toast } from "sonner";
 
 const interviewTypes = [
@@ -63,8 +64,8 @@ const InterviewPractice = () => {
   const [showReport, setShowReport] = useState(false);
 
   const { sendMessage, isLoading, currentResponse, clearHistory } = useChat();
-  const { isListening, transcript, startListening, stopListening, resetTranscript, isSupported, hasResult } = useCleanSpeechRecognition();
-  const { speak, stop: stopSpeaking, isSpeaking, isLoading: isTTSLoading } = useElevenLabsTTS();
+  const { isListening, transcript, startListening, stopListening, resetTranscript, isSupported, hasResult, error: speechError } = useSingleSentenceRecognition();
+  const { speak, stop: stopSpeaking, isSpeaking, isLoading: isTTSLoading } = useEnhancedTTS();
   const { videoRef, isEnabled: cameraEnabled, isLoading: cameraLoading, toggleCamera } = useCamera();
 
   const selectedType = interviewTypes.find((t) => t.id === interviewType);
@@ -161,42 +162,47 @@ ${jobDescription}`;
     setCurrentQuestion("");
 
     try {
+      // Get stage-specific prompt for structured interview flow
+      const stagePrompt = getInterviewStagePrompt(questionCount + 1, jdAnalysis);
+      
       let systemContext: string;
       
       if (interviewType === "jd" && jdAnalysis) {
-        systemContext = `You are a professional interviewer conducting a MOCK INTERVIEW for the position of ${jdAnalysis.role}.
+        systemContext = `You are a professional interviewer conducting a REAL MOCK INTERVIEW for ${jdAnalysis.role}.
 
-JOB REQUIREMENTS:
-- Required Skills: ${jdAnalysis.skills.join(", ")}
-- Key Responsibilities: ${jdAnalysis.responsibilities.join("; ")}
-- Experience Level: ${jdAnalysis.experienceLevel}
-- Important Keywords: ${jdAnalysis.keywords.join(", ")}
+${stagePrompt}
 
-INTERVIEW RULES:
-1. Ask ONE question at a time - mix HR, technical, situational, and behavioral questions
-2. Match difficulty to the ${jdAnalysis.experienceLevel} experience level
-3. After EACH answer:
-   - Give SHORT, constructive feedback (1-2 sentences)
-   - If the answer could be improved, suggest a better version
-   - Tell what recruiters expect for this ${jdAnalysis.role} role
-4. Then ask the next question
+JOB CONTEXT:
+- Role: ${jdAnalysis.role}
+- Skills: ${jdAnalysis.skills.slice(0, 5).join(", ")}
+- Level: ${jdAnalysis.experienceLevel}
 
-TONE: Professional, supportive, like a real interview environment. No casual chatting.
+INTERVIEW STYLE (CRITICAL):
+1. Sound like a REAL HUMAN interviewer, not AI
+2. Ask ONE clear question at a time
+3. Keep responses SHORT (2-3 sentences max)
+4. After EACH answer, give:
+   - Brief acknowledgment ("That's interesting..." / "I see...")
+   - One specific improvement tip
+   - Then ask next question
+5. Use natural transitions ("Let me ask you about..." / "Moving on...")
+6. Be professional but warm
 
-This is question ${questionCount + 1}. After 6-8 questions, wrap up with final feedback.`;
+This is question ${questionCount + 1} of approximately 7-8 total.`;
       } else {
-        systemContext = `You are a professional ${selectedType?.name} interviewer. 
+        systemContext = `You are a professional ${selectedType?.name} interviewer conducting a REAL interview.
 
-Your approach:
-- Ask one clear question at a time
-- Listen carefully and respond naturally to what the candidate says
-- Provide brief, constructive feedback when appropriate
-- Keep responses under 3 sentences usually
-- Be professional but warm and encouraging
-- After each answer, either ask a follow-up or move to the next topic
-- For ${selectedType?.name}: Focus on ${selectedType?.description?.toLowerCase()}
+${stagePrompt}
 
-Remember: This is question ${questionCount + 1}. After about 5-7 questions, start wrapping up the interview naturally.`;
+INTERVIEW STYLE:
+1. Sound human and natural, not robotic
+2. Ask ONE question at a time
+3. Keep responses under 3 sentences
+4. Give brief feedback after each answer
+5. Be professional but encouraging
+6. Use natural conversation flow
+
+Question ${questionCount + 1} of ~7. Focus on: ${selectedType?.description?.toLowerCase()}`;
       }
 
       const response = await sendMessage(userText, "interviewer", {
@@ -206,7 +212,7 @@ Remember: This is question ${questionCount + 1}. After about 5-7 questions, star
       setCurrentQuestion(response);
       setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "interviewer", content: response }]);
       setQuestionCount((prev) => prev + 1);
-      speak(response);
+      speak(response, "english");
     } catch (error) {
       toast.error("Something went wrong. Please try again.");
     }
@@ -481,6 +487,11 @@ Remember: This is question ${questionCount + 1}. After about 5-7 questions, star
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
           >
+            {/* Interview Stages Progress */}
+            <div className="mb-4">
+              <InterviewStages currentStage="" questionCount={questionCount} />
+            </div>
+
             {/* Progress */}
             <div className="mb-6">
               <div className="flex items-center justify-between text-sm mb-2">

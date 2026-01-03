@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   ArrowLeft, Globe, RefreshCw, Trophy, Flame, Target, BookOpen, Sparkles, 
   Mic, Volume2, CheckCircle2, XCircle, Star, Zap, Heart, Award, 
-  GraduationCap, MessageCircle, FileText, Pause, Play, RotateCcw, Check
+  GraduationCap, MessageCircle, FileText, Pause, Play, RotateCcw, Check, Image
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -13,11 +13,12 @@ import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useChat } from "@/hooks/useChat";
-import { useCleanSpeechRecognition } from "@/hooks/useCleanSpeechRecognition";
-import { useElevenLabsTTS } from "@/hooks/useElevenLabsTTS";
+import { useSingleSentenceRecognition } from "@/hooks/useSingleSentenceRecognition";
+import { useEnhancedTTS } from "@/hooks/useEnhancedTTS";
 import VoiceOrb from "@/components/VoiceOrb";
 import StatusIndicator from "@/components/StatusIndicator";
 import WaveformVisualizer from "@/components/WaveformVisualizer";
+import VisualLearningActivity from "@/components/VisualLearningActivity";
 import { toast } from "sonner";
 
 // Learning Mode Types
@@ -129,6 +130,8 @@ const LanguageLearning = () => {
   const [isSpeakingMode, setIsSpeakingMode] = useState(false);
   const [talkOnlyMode, setTalkOnlyMode] = useState(false);
   const [slowMode, setSlowMode] = useState(false);
+  const [showVisualActivity, setShowVisualActivity] = useState(false);
+  const [visualActivityMode, setVisualActivityMode] = useState(false);
   
   // Voice Control State - Using confirmation flow
   const [pendingVoiceConfirm, setPendingVoiceConfirm] = useState<string | null>(null);
@@ -136,8 +139,8 @@ const LanguageLearning = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { sendMessage, isLoading, currentResponse, clearHistory } = useChat();
-  const { isListening, transcript, startListening, stopListening, resetTranscript, isSupported, hasResult } = useCleanSpeechRecognition();
-  const { speak, stop: stopSpeaking, isSpeaking, isLoading: isTTSLoading } = useElevenLabsTTS();
+  const { isListening, transcript, startListening, stopListening, resetTranscript, isSupported, hasResult, error: speechError } = useSingleSentenceRecognition();
+  const { speak, stop: stopSpeaking, isSpeaking, isLoading: isTTSLoading } = useEnhancedTTS();
 
   // Auto-scroll
   useEffect(() => {
@@ -255,7 +258,7 @@ Use activities: fill blanks, choose option, translate, speak.`;
     setConversation([{ id: crypto.randomUUID(), role: "ai", text: greeting }]);
     
     if (!slowMode) {
-      speak(greeting);
+      speak(greeting, targetLanguage);
     }
     
     setTimeout(() => generateNextActivity(), 2000);
@@ -322,7 +325,7 @@ Use activities: fill blanks, choose option, translate, speak.`;
         setConversation(prev => [...prev, { id: crypto.randomUUID(), role: "ai", text: activityMessage }]);
         
         if (!slowMode) {
-          speak(activity.instruction + ". " + activity.content);
+          speak(activity.instruction + ". " + activity.content, targetLanguage);
         }
       }
     } catch (error) {
@@ -462,7 +465,7 @@ Provide JSON feedback:
         ]);
         
         if (!slowMode) {
-          speak(encouragement);
+          speak(encouragement, targetLanguage);
         }
       } else {
         setHearts(prev => Math.max(prev - 1, 0));
@@ -475,7 +478,7 @@ Provide JSON feedback:
         ]);
         
         if (!slowMode) {
-          speak(correction);
+          speak(correction, targetLanguage);
         }
       }
     }
@@ -538,7 +541,7 @@ Provide JSON feedback:
   const repeatLastMessage = () => {
     const lastAiMessage = [...conversation].reverse().find((m) => m.role === "ai");
     if (lastAiMessage) {
-      speak(lastAiMessage.text);
+      speak(lastAiMessage.text, targetLanguage);
     }
   };
 
@@ -782,6 +785,15 @@ Provide JSON feedback:
                   Session Options
                 </label>
                 <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setVisualActivityMode(!visualActivityMode)}
+                    className={`px-4 py-2 rounded-xl border-2 text-sm font-medium transition-all flex items-center gap-2 ${
+                      visualActivityMode ? "border-primary bg-primary/10 text-primary" : "border-border/50"
+                    }`}
+                  >
+                    <Image className="w-4 h-4" />
+                    Visual Mode
+                  </button>
                   <button
                     onClick={() => setTalkOnlyMode(!talkOnlyMode)}
                     className={`px-4 py-2 rounded-xl border-2 text-sm font-medium transition-all flex items-center gap-2 ${
