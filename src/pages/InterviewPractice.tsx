@@ -9,8 +9,8 @@ import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import Avatar3D from "@/components/Avatar3D";
 import { useChat } from "@/hooks/useChat";
-import { useSingleSentenceRecognition } from "@/hooks/useSingleSentenceRecognition";
-import { useEnhancedTTS } from "@/hooks/useEnhancedTTS";
+import { useReliableSpeechRecognition } from "@/hooks/useReliableSpeechRecognition";
+import { useNaturalTTS } from "@/hooks/useNaturalTTS";
 import { useCamera } from "@/hooks/useCamera";
 import VoiceOrb from "@/components/VoiceOrb";
 import StatusIndicator from "@/components/StatusIndicator";
@@ -64,8 +64,8 @@ const InterviewPractice = () => {
   const [showReport, setShowReport] = useState(false);
 
   const { sendMessage, isLoading, currentResponse, clearHistory } = useChat();
-  const { isListening, transcript, startListening, stopListening, resetTranscript, isSupported, hasResult, error: speechError } = useSingleSentenceRecognition();
-  const { speak, stop: stopSpeaking, isSpeaking, isLoading: isTTSLoading } = useEnhancedTTS();
+  const { isListening, transcript, startListening, stopListening, resetTranscript, isSupported, hasResult, error: speechError, failedAttempts } = useReliableSpeechRecognition();
+  const { speak, stop: stopSpeaking, isSpeaking, isLoading: isTTSLoading } = useNaturalTTS();
   const { videoRef, isEnabled: cameraEnabled, isLoading: cameraLoading, toggleCamera } = useCamera();
 
   const selectedType = interviewTypes.find((t) => t.id === interviewType);
@@ -643,6 +643,25 @@ Question ${questionCount + 1} of ~7. Focus on: ${selectedType?.description?.toLo
               )}
             </AnimatePresence>
 
+            {/* Voice Error Display */}
+            <AnimatePresence>
+              {speechError && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  className="mb-4 p-3 rounded-xl bg-destructive/10 border border-destructive/30 text-center max-w-md mx-auto"
+                >
+                  <p className="text-sm text-destructive">{speechError}</p>
+                  {failedAttempts >= 2 && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Voice unavailable. Please type your answer.
+                    </p>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {/* Voice visualization */}
             <AnimatePresence>
               {status === "listening" && !pendingVoiceConfirm && (
@@ -653,7 +672,9 @@ Question ${questionCount + 1} of ~7. Focus on: ${selectedType?.description?.toLo
                   className="mb-6"
                 >
                   <WaveformVisualizer isActive={true} className="h-16 max-w-md mx-auto" />
-                  <p className="text-sm text-muted-foreground mt-3 text-center">Listening for one sentence...</p>
+                  <p className="text-sm text-primary font-medium mt-3 text-center animate-pulse">
+                    🎤 Listening... Speak your answer now!
+                  </p>
                 </motion.div>
               )}
             </AnimatePresence>
