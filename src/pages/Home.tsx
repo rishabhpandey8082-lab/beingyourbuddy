@@ -13,11 +13,16 @@ import {
   ArrowRight,
   Zap,
   Globe,
-  MessageSquare
+  MessageSquare,
+  Shield,
+  Smile,
+  Eye,
+  Lock
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import ConversationHistory from "@/components/ConversationHistory";
+import Footer from "@/components/Footer";
 import { toast } from "sonner";
 
 const features = [
@@ -25,7 +30,7 @@ const features = [
     id: "search",
     title: "AI Search",
     subtitle: "Smart Answers",
-    description: "Ask questions, explore topics, and get smart answers using text or voice.",
+    description: "Ask questions. Upload PDFs or images. Get clear, intelligent answers instantly — with text or voice.",
     icon: MessageSquare,
     path: "/search",
     gradient: "from-cyan-400 via-teal-400 to-emerald-400",
@@ -36,7 +41,7 @@ const features = [
     id: "language",
     title: "Learn Languages",
     subtitle: "Interactive Learning",
-    description: "Practice speaking and learning languages step-by-step with interactive lessons.",
+    description: "Practice speaking, listening, and understanding languages naturally with interactive lessons and real-time feedback.",
     icon: Globe,
     path: "/language",
     gradient: "from-violet-400 via-purple-400 to-fuchsia-400",
@@ -47,13 +52,21 @@ const features = [
     id: "interview",
     title: "Interview Practice",
     subtitle: "Career Preparation",
-    description: "Practice real interview questions and improve confidence with AI feedback.",
+    description: "Prepare for real interviews with role-based questions, job description analysis, and honest AI feedback.",
     icon: Briefcase,
     path: "/interview",
     gradient: "from-amber-400 via-orange-400 to-rose-400",
     glowColor: "hsl(25 90% 55% / 0.3)",
     isPrimary: false,
   },
+];
+
+const whyCognify = [
+  { icon: Smile, text: "Designed for confidence, not pressure" },
+  { icon: Mic, text: "Human-like voice interaction" },
+  { icon: Eye, text: "Clean, distraction-free experience" },
+  { icon: Globe, text: "Built for global users" },
+  { icon: Lock, text: "Secure, private, and reliable" },
 ];
 
 const Home = () => {
@@ -92,7 +105,7 @@ const Home = () => {
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
             <Sparkles className="w-5 h-5 text-primary-foreground" />
           </div>
-          <h1 className="text-2xl font-display font-bold gradient-text">YourBuddy</h1>
+          <h1 className="text-2xl font-display font-bold gradient-text">Cognify</h1>
         </div>
         <div className="flex items-center gap-3">
           {user && (
@@ -147,20 +160,18 @@ const Home = () => {
             transition={{ duration: 0.5, delay: 0.3 }}
           >
             <Zap className="w-4 h-4 text-primary" />
-            <span className="text-sm font-medium text-muted-foreground">Powered by Advanced AI</span>
+            <span className="text-sm font-medium text-muted-foreground">From Curiosity to Confidence</span>
           </motion.div>
 
           {/* Main Headline */}
           <h2 className="text-5xl md:text-7xl font-display font-bold mb-6 leading-tight">
-            Your AI Companion for{" "}
-            <span className="hero-text">Everything</span>
+            <span className="hero-text">Think. Learn. Speak.</span>
           </h2>
           
           {/* Subtitle */}
           <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto mb-10 leading-relaxed">
-            Search, learn languages, and practice interviews with natural 
-            <span className="text-foreground font-medium"> voice conversations</span>. 
-            No friction, just real human-like interaction.
+            One intelligent AI platform for smart search, language learning, and real interview practice — 
+            <span className="text-foreground font-medium"> built to help you grow with confidence.</span>
           </p>
 
           {/* CTA Buttons */}
@@ -172,15 +183,15 @@ const Home = () => {
           >
             <Link to="/search">
               <button className="btn-cta flex items-center gap-3 group">
-                <Mic className="w-5 h-5" />
-                <span>Start Speaking Now</span>
+                <Sparkles className="w-5 h-5" />
+                <span>Get Started</span>
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </button>
             </Link>
-            <Link to="/search">
+            <Link to="/about">
               <button className="btn-secondary flex items-center gap-2">
                 <Search className="w-4 h-4" />
-                <span>Try Text Mode</span>
+                <span>Explore Features</span>
               </button>
             </Link>
           </motion.div>
@@ -225,8 +236,11 @@ const Home = () => {
 
                   {/* Arrow indicator */}
                   <div className="mt-6 flex items-center gap-2 text-primary opacity-0 group-hover:opacity-100 transition-opacity">
-                    <span className="text-sm font-medium">Get Started</span>
-                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    <span className="text-sm font-medium">
+                      {feature.id === "search" ? "Try AI Search" : 
+                       feature.id === "language" ? "Start Learning" : 
+                       "Practice Interviews"} →
+                    </span>
                   </div>
 
                   {/* Primary badge */}
@@ -243,24 +257,51 @@ const Home = () => {
           ))}
         </div>
 
-        {/* Trust message */}
+        {/* Why Cognify Section */}
+        <motion.div
+          className="mt-24 text-center max-w-4xl"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1 }}
+        >
+          <h3 className="text-2xl font-display font-semibold mb-8">
+            Why learners and professionals choose Cognify
+          </h3>
+          <div className="flex flex-wrap justify-center gap-4">
+            {whyCognify.map((item, index) => (
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 1.1 + index * 0.1 }}
+                className="flex items-center gap-2 glass-subtle px-4 py-2 rounded-full"
+              >
+                <item.icon className="w-4 h-4 text-primary" />
+                <span className="text-sm text-muted-foreground">{item.text}</span>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* Final CTA */}
         <motion.div
           className="mt-20 text-center"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 1.2 }}
+          transition={{ delay: 1.4 }}
         >
-          <p className="text-muted-foreground text-sm mb-2">
-            Trusted by learners and professionals worldwide
+          <p className="text-muted-foreground mb-4">
+            Ready to turn curiosity into confidence?
           </p>
-          <p className="text-lg font-display font-medium gradient-text">
-            YourBuddy — Calm, intelligent, and always here for you.
-          </p>
+          <Link to="/search">
+            <Button className="btn-cta">
+              Start using Cognify today
+            </Button>
+          </Link>
         </motion.div>
       </main>
 
-      {/* Footer gradient fade */}
-      <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-background to-transparent pointer-events-none" />
+      <Footer />
     </div>
   );
 };

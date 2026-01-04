@@ -13,8 +13,8 @@ import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useChat } from "@/hooks/useChat";
-import { useSingleSentenceRecognition } from "@/hooks/useSingleSentenceRecognition";
-import { useEnhancedTTS } from "@/hooks/useEnhancedTTS";
+import { useReliableSpeechRecognition } from "@/hooks/useReliableSpeechRecognition";
+import { useNaturalTTS } from "@/hooks/useNaturalTTS";
 import VoiceOrb from "@/components/VoiceOrb";
 import StatusIndicator from "@/components/StatusIndicator";
 import WaveformVisualizer from "@/components/WaveformVisualizer";
@@ -139,8 +139,8 @@ const LanguageLearning = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { sendMessage, isLoading, currentResponse, clearHistory } = useChat();
-  const { isListening, transcript, startListening, stopListening, resetTranscript, isSupported, hasResult, error: speechError } = useSingleSentenceRecognition();
-  const { speak, stop: stopSpeaking, isSpeaking, isLoading: isTTSLoading } = useEnhancedTTS();
+  const { isListening, transcript, startListening, stopListening, resetTranscript, isSupported, hasResult, error: speechError, failedAttempts } = useReliableSpeechRecognition();
+  const { speak, stop: stopSpeaking, isSpeaking, isLoading: isTTSLoading } = useNaturalTTS();
 
   // Auto-scroll
   useEffect(() => {
@@ -268,6 +268,14 @@ Use activities: fill blanks, choose option, translate, speak.`;
     setShowFeedback(false);
     setUserAnswer("");
     setCurrentActivity(null);
+    
+    // If visual mode is enabled, show visual activity every 2nd activity
+    if (visualActivityMode && activityCount % 2 === 1) {
+      setShowVisualActivity(true);
+      return;
+    }
+    
+    setShowVisualActivity(false);
     
     const activityTypes: ActivityType[] = selectedMode === "ielts" && ieltsSkill === "speaking" 
       ? ["speaking"] 
@@ -856,47 +864,87 @@ Provide JSON feedback:
               </div>
             </div>
 
+            {/* Visual Learning Activity Mode */}
+            {visualActivityMode && showVisualActivity && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="mb-4"
+              >
+                <VisualLearningActivity
+                  language={targetLanguage}
+                  level={selectedMode === "german" ? germanLevel : "A1"}
+                  onComplete={(isCorrect, answer) => {
+                    if (isCorrect) {
+                      setSessionXP(prev => prev + 15);
+                      setLessonProgress(prev => Math.min(prev + 15, 100));
+                    } else {
+                      setHearts(prev => Math.max(prev - 1, 0));
+                    }
+                    setActivityCount(prev => prev + 1);
+                    
+                    // Continue to next activity
+                    setTimeout(() => {
+                      if (lessonProgress >= 100 || activityCount >= 8) {
+                        endSession();
+                      } else {
+                        setShowVisualActivity(false);
+                        generateNextActivity();
+                      }
+                    }, 2000);
+                  }}
+                  onSpeak={(text) => speak(text, targetLanguage)}
+                  onListen={toggleListening}
+                  isListening={isListening}
+                  transcript={transcript}
+                  isSpeaking={isSpeaking}
+                />
+              </motion.div>
+            )}
+
             {/* Conversation & Activities */}
-            <ScrollArea className="flex-1 mb-4" ref={scrollRef}>
-              <div className="space-y-4 pr-4">
-                <AnimatePresence>
-                  {conversation.map((msg) => (
-                    <motion.div
-                      key={msg.id}
-                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                    >
-                      <div
-                        className={`max-w-[85%] rounded-2xl px-4 py-3 ${
-                          msg.role === "user"
-                            ? msg.isCorrect === false
-                              ? "bg-destructive/20 text-foreground rounded-br-md"
-                              : msg.isCorrect === true
-                              ? "bg-success/20 text-foreground rounded-br-md"
-                              : "bg-primary text-primary-foreground rounded-br-md"
-                            : "glass-card rounded-bl-md"
-                        }`}
+            {(!visualActivityMode || !showVisualActivity) && (
+              <ScrollArea className="flex-1 mb-4" ref={scrollRef}>
+                <div className="space-y-4 pr-4">
+                  <AnimatePresence>
+                    {conversation.map((msg) => (
+                      <motion.div
+                        key={msg.id}
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                       >
-                        <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
+                        <div
+                          className={`max-w-[85%] rounded-2xl px-4 py-3 ${
+                            msg.role === "user"
+                              ? msg.isCorrect === false
+                                ? "bg-destructive/20 text-foreground rounded-br-md"
+                                : msg.isCorrect === true
+                                ? "bg-success/20 text-foreground rounded-br-md"
+                                : "bg-primary text-primary-foreground rounded-br-md"
+                              : "glass-card rounded-bl-md"
+                          }`}
+                        >
+                          <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+
+                  {currentResponse && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="flex justify-start"
+                    >
+                      <div className="glass-card rounded-2xl rounded-bl-md px-4 py-3 max-w-[85%]">
+                        <p className="whitespace-pre-wrap leading-relaxed">{currentResponse}</p>
                       </div>
                     </motion.div>
-                  ))}
-                </AnimatePresence>
-
-                {currentResponse && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="flex justify-start"
-                  >
-                    <div className="glass-card rounded-2xl rounded-bl-md px-4 py-3 max-w-[85%]">
-                      <p className="whitespace-pre-wrap leading-relaxed">{currentResponse}</p>
-                    </div>
-                  </motion.div>
-                )}
-              </div>
-            </ScrollArea>
+                  )}
+                </div>
+              </ScrollArea>
+            )}
 
             {/* Activity Input Area */}
             {currentActivity && !showFeedback && (
@@ -988,6 +1036,25 @@ Provide JSON feedback:
               )}
             </AnimatePresence>
 
+            {/* Voice Error Display */}
+            <AnimatePresence>
+              {speechError && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  className="mb-4 p-3 rounded-xl bg-destructive/10 border border-destructive/30 text-center"
+                >
+                  <p className="text-sm text-destructive">{speechError}</p>
+                  {failedAttempts >= 2 && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Voice paused. Please type your answer instead.
+                    </p>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {/* Voice visualization */}
             <AnimatePresence>
               {status === "listening" && (
@@ -998,6 +1065,9 @@ Provide JSON feedback:
                   className="mb-4"
                 >
                   <WaveformVisualizer isActive={true} className="h-12" />
+                  <p className="text-sm text-primary font-medium mt-2 text-center animate-pulse">
+                    🎤 Listening... Speak now!
+                  </p>
                   {transcript && (
                     <p className="text-sm text-muted-foreground mt-2 text-center italic">"{transcript}"</p>
                   )}
