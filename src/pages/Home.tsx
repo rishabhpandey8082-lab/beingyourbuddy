@@ -24,6 +24,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import ConversationHistory from "@/components/ConversationHistory";
 import Footer from "@/components/Footer";
 import { toast } from "sonner";
+import blitixLogo from "@/assets/blitix-logo.png";
 
 const features = [
   {
@@ -61,7 +62,7 @@ const features = [
   },
 ];
 
-const whyCognify = [
+const whyBlitix = [
   { icon: Smile, text: "Designed for confidence, not pressure" },
   { icon: Mic, text: "Human-like voice interaction" },
   { icon: Eye, text: "Clean, distraction-free experience" },
@@ -102,10 +103,7 @@ const Home = () => {
         transition={{ duration: 0.6 }}
       >
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-            <Sparkles className="w-5 h-5 text-primary-foreground" />
-          </div>
-          <h1 className="text-2xl font-display font-bold gradient-text">Cognify</h1>
+          <img src={blitixLogo} alt="Blitix" className="h-10 w-auto" />
         </div>
         <div className="flex items-center gap-3">
           {user && (
@@ -165,13 +163,13 @@ const Home = () => {
 
           {/* Main Headline */}
           <h2 className="text-5xl md:text-7xl font-display font-bold mb-6 leading-tight">
-            <span className="hero-text">Think. Learn. Speak.</span>
+            <span className="hero-text">Think Faster. Learn Smarter.</span>
           </h2>
           
           {/* Subtitle */}
           <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto mb-10 leading-relaxed">
-            One intelligent AI platform for smart search, language learning, and real interview practice — 
-            <span className="text-foreground font-medium"> built to help you grow with confidence.</span>
+            Blitix helps you ask better questions, learn faster, and speak with confidence — 
+            <span className="text-foreground font-medium"> whether you're a student, professional, or a young learner.</span>
           </p>
 
           {/* CTA Buttons */}
@@ -257,7 +255,7 @@ const Home = () => {
           ))}
         </div>
 
-        {/* Why Cognify Section */}
+        {/* Why Blitix Section */}
         <motion.div
           className="mt-24 text-center max-w-4xl"
           initial={{ opacity: 0 }}
@@ -265,10 +263,10 @@ const Home = () => {
           transition={{ delay: 1 }}
         >
           <h3 className="text-2xl font-display font-semibold mb-8">
-            Why learners and professionals choose Cognify
+            Why learners and professionals choose Blitix
           </h3>
           <div className="flex flex-wrap justify-center gap-4">
-            {whyCognify.map((item, index) => (
+            {whyBlitix.map((item, index) => (
               <motion.div
                 key={index}
                 initial={{ opacity: 0, scale: 0.9 }}
@@ -295,7 +293,7 @@ const Home = () => {
           </p>
           <Link to="/search">
             <Button className="btn-cta">
-              Start using Cognify today
+              Start using Blitix today
             </Button>
           </Link>
         </motion.div>

@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Sparkles } from "lucide-react";
+import blitixLogo from "@/assets/blitix-logo.png";
 
 const Footer = () => {
   return (
@@ -8,14 +8,9 @@ const Footer = () => {
         <div className="flex flex-col md:flex-row items-center justify-between gap-6">
           {/* Logo & Tagline */}
           <div className="flex flex-col items-center md:items-start gap-2">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-                <Sparkles className="w-4 h-4 text-primary-foreground" />
-              </div>
-              <span className="text-lg font-display font-bold gradient-text">Cognify</span>
-            </div>
+            <img src={blitixLogo} alt="Blitix" className="h-8 w-auto" />
             <p className="text-sm text-muted-foreground">
-              Think. Learn. Speak.
+              Think Faster. Learn Smarter.
             </p>
           </div>
 
@@ -45,7 +40,7 @@ const Footer = () => {
         {/* Copyright */}
         <div className="mt-6 pt-6 border-t border-border/40 text-center">
           <p className="text-xs text-muted-foreground">
-            © {new Date().getFullYear()} Cognify — Founded by Rishabh Raj Pandey
+            © {new Date().getFullYear()} Blitix — Founded by Rishabh Raj Pandey. All rights reserved.
           </p>
         </div>
       </div>

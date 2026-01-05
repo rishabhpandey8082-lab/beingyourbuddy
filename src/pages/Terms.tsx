@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { ArrowLeft, FileText, AlertCircle, CheckCircle, Scale } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Footer from "@/components/Footer";
+import blitixLogo from "@/assets/blitix-logo.png";
 
 const Terms = () => {
   return (
@@ -20,9 +21,7 @@ const Terms = () => {
           </Button>
         </Link>
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-            <FileText className="w-4 h-4 text-primary-foreground" />
-          </div>
+          <img src={blitixLogo} alt="Blitix" className="h-8 w-auto" />
           <span className="text-lg font-display font-semibold">Terms of Use</span>
         </div>
       </header>
@@ -60,7 +59,7 @@ const Terms = () => {
               <div>
                 <h2 className="text-xl font-semibold mb-3">Agreement</h2>
                 <p className="text-muted-foreground leading-relaxed">
-                  By using Cognify, you agree to use the platform responsibly and in 
+                  By using Blitix, you agree to use the platform responsibly and in 
                   accordance with these terms.
                 </p>
               </div>
@@ -83,7 +82,7 @@ const Terms = () => {
                     </li>
                     <li className="flex items-start gap-2">
                       <span className="w-1.5 h-1.5 rounded-full bg-destructive mt-2 flex-shrink-0" />
-                      <span>Use Cognify for harmful or illegal activities</span>
+                      <span>Use Blitix for harmful or illegal activities</span>
                     </li>
                   </ul>
                 </div>
@@ -96,7 +95,7 @@ const Terms = () => {
                 <div>
                   <h2 className="text-xl font-semibold mb-3">Disclaimer</h2>
                   <p className="text-muted-foreground leading-relaxed">
-                    Cognify provides AI-generated responses intended for learning and practice 
+                    Blitix provides AI-generated responses intended for learning and practice 
                     purposes. We do not guarantee outcomes related to exams, jobs, or certifications.
                   </p>
                 </div>
