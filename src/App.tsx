@@ -9,6 +9,8 @@ import Home from "./pages/Home";
 import Auth from "./pages/Auth";
 import AISearch from "./pages/AISearch";
 import LanguageLearning from "./pages/LanguageLearning";
+import IELTSPractice from "./pages/IELTSPractice";
+import GoetheExam from "./pages/GoetheExam";
 import InterviewPractice from "./pages/InterviewPractice";
 import About from "./pages/About";
 import Privacy from "./pages/Privacy";
@@ -30,6 +32,8 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/search" element={<AISearch />} />
             <Route path="/language" element={<LanguageLearning />} />
+            <Route path="/ielts" element={<IELTSPractice />} />
+            <Route path="/goethe" element={<GoetheExam />} />
             <Route path="/interview" element={<InterviewPractice />} />
             <Route path="/about" element={<About />} />
             <Route path="/privacy" element={<Privacy />} />

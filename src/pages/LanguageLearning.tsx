@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   ArrowLeft, Globe, RefreshCw, Trophy, Flame, Target, BookOpen, Sparkles, 
@@ -57,9 +57,9 @@ interface IELTSFeedback {
 }
 
 const learningModes = [
-  { id: "ielts" as const, label: "IELTS Preparation", icon: GraduationCap, description: "Speaking, Writing, Reading, Listening", color: "from-blue-500 to-indigo-500" },
-  { id: "german" as const, label: "German Goethe Exam", icon: Globe, description: "A1 to C1 Level Preparation", color: "from-amber-500 to-orange-500" },
-  { id: "general" as const, label: "General Language Practice", icon: MessageCircle, description: "Daily practice & confidence in any language", color: "from-emerald-500 to-teal-500" },
+  { id: "ielts" as const, label: "IELTS Preparation", icon: GraduationCap, description: "Speaking, Writing, Reading, Listening", color: "from-blue-500 to-indigo-500", path: "/ielts" },
+  { id: "german" as const, label: "German Goethe Exam", icon: Globe, description: "A1 to C1 Level Preparation", color: "from-amber-500 to-orange-500", path: "/goethe" },
+  { id: "general" as const, label: "General Language Practice", icon: MessageCircle, description: "Daily practice & confidence in any language", color: "from-emerald-500 to-teal-500", path: null },
 ];
 
 const targetLanguages: { id: TargetLanguage; name: string; flag: string }[] = [
@@ -107,6 +107,7 @@ const corrections = [
 ];
 
 const LanguageLearning = () => {
+  const navigate = useNavigate();
   // Mode & Setup State
   const [selectedMode, setSelectedMode] = useState<LearningMode | null>(null);
   const [targetLanguage, setTargetLanguage] = useState<TargetLanguage>("english");
@@ -666,13 +667,20 @@ Provide JSON feedback:
             <div className="space-y-4">
               {learningModes.map((mode, index) => {
                 const Icon = mode.icon;
+                const handleClick = () => {
+                  if (mode.path) {
+                    navigate(mode.path);
+                  } else {
+                    setSelectedMode(mode.id);
+                  }
+                };
                 return (
                   <motion.button
                     key={mode.id}
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.3 + index * 0.1 }}
-                    onClick={() => setSelectedMode(mode.id)}
+                    onClick={handleClick}
                     className="w-full p-6 rounded-2xl glass-card hover:scale-[1.02] transition-all text-left group"
                   >
                     <div className="flex items-center gap-4">
@@ -682,6 +690,9 @@ Provide JSON feedback:
                       <div className="flex-1">
                         <h3 className="text-xl font-semibold mb-1">{mode.label}</h3>
                         <p className="text-muted-foreground">{mode.description}</p>
+                        {mode.path && (
+                          <span className="text-xs text-primary mt-1 block">Opens dedicated practice page →</span>
+                        )}
                       </div>
                       <ArrowLeft className="w-5 h-5 rotate-180 text-muted-foreground group-hover:text-primary transition-colors" />
                     </div>
