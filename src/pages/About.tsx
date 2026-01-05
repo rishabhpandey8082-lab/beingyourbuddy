@@ -1,8 +1,9 @@
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, Sparkles, Brain, Globe, Briefcase, Target, Heart } from "lucide-react";
+import { ArrowLeft, Brain, Globe, Briefcase, Target, Heart, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Footer from "@/components/Footer";
+import blitixLogo from "@/assets/blitix-logo.png";
 
 const About = () => {
   return (
@@ -20,10 +21,8 @@ const About = () => {
           </Button>
         </Link>
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-            <Sparkles className="w-4 h-4 text-primary-foreground" />
-          </div>
-          <span className="text-lg font-display font-semibold">About Cognify</span>
+          <img src={blitixLogo} alt="Blitix" className="h-8 w-auto" />
+          <span className="text-lg font-display font-semibold">About</span>
         </div>
       </header>
 
@@ -41,28 +40,29 @@ const About = () => {
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ type: "spring", bounce: 0.5 }}
-              className="w-20 h-20 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-primary via-accent to-secondary flex items-center justify-center shadow-glow"
+              className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-primary via-accent to-secondary flex items-center justify-center shadow-glow overflow-hidden"
             >
-              <Sparkles className="w-10 h-10 text-white" />
+              <img src={blitixLogo} alt="Blitix" className="w-20 h-20 object-contain" />
             </motion.div>
             <h1 className="text-4xl md:text-5xl font-display font-bold mb-4">
-              About <span className="gradient-text">Cognify</span>
+              About <span className="gradient-text">Blitix</span>
             </h1>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              From Curiosity to Confidence
+              Think Faster. Learn Smarter.
             </p>
           </div>
 
           {/* Main Content */}
           <div className="space-y-8 glass-card rounded-3xl p-8 md:p-12">
             <p className="text-lg leading-relaxed text-muted-foreground">
-              Cognify is an AI-powered learning and communication platform designed to help people 
-              think clearly, learn effectively, and speak with confidence.
+              Blitix is an intelligent AI platform for smart search, language learning, 
+              interview preparation, and kid-friendly education — all in one place.
             </p>
 
             <p className="text-lg leading-relaxed text-muted-foreground">
               We believe intelligence is not about memorizing answers — it's about understanding, 
-              expression, and growth.
+              expression, and growth. Blitix helps you ask better questions, learn faster, and 
+              speak with confidence.
             </p>
 
             {/* Features */}
@@ -87,6 +87,21 @@ const About = () => {
                 </div>
                 <h3 className="font-semibold mb-1">Interview Preparation</h3>
                 <p className="text-sm text-muted-foreground">Real interview practice</p>
+              </div>
+            </div>
+
+            {/* Brand Personality */}
+            <div className="border-t border-border/50 pt-8">
+              <div className="flex items-center gap-3 mb-4">
+                <Zap className="w-6 h-6 text-primary" />
+                <h2 className="text-2xl font-display font-semibold">Brand Personality</h2>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {["Intelligent", "Fast", "Friendly", "Modern", "Trustworthy", "International"].map((trait) => (
+                  <span key={trait} className="px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium">
+                    {trait}
+                  </span>
+                ))}
               </div>
             </div>
 
@@ -128,7 +143,7 @@ const About = () => {
             <p className="text-muted-foreground mb-4">Ready to start your journey?</p>
             <Link to="/">
               <Button className="btn-cta">
-                Get Started with Cognify
+                Get Started with Blitix
               </Button>
             </Link>
           </motion.div>

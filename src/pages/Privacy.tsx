@@ -1,8 +1,9 @@
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, Sparkles, Shield, Lock, Eye, Database } from "lucide-react";
+import { ArrowLeft, Shield, Lock, Eye, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Footer from "@/components/Footer";
+import blitixLogo from "@/assets/blitix-logo.png";
 
 const Privacy = () => {
   return (
@@ -20,9 +21,7 @@ const Privacy = () => {
           </Button>
         </Link>
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-            <Shield className="w-4 h-4 text-primary-foreground" />
-          </div>
+          <img src={blitixLogo} alt="Blitix" className="h-8 w-auto" />
           <span className="text-lg font-display font-semibold">Privacy Policy</span>
         </div>
       </header>
@@ -60,7 +59,7 @@ const Privacy = () => {
               <div>
                 <h2 className="text-xl font-semibold mb-3">Our Commitment</h2>
                 <p className="text-muted-foreground leading-relaxed">
-                  Cognify does not sell personal data. We only collect information necessary 
+                  Blitix does not sell personal data. We only collect information necessary 
                   to improve your experience and provide our services.
                 </p>
               </div>
