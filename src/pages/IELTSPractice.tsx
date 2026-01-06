@@ -18,6 +18,8 @@ import { useNaturalTTS } from "@/hooks/useNaturalTTS";
 import VoiceOrb from "@/components/VoiceOrb";
 import StatusIndicator from "@/components/StatusIndicator";
 import WaveformVisualizer from "@/components/WaveformVisualizer";
+import IELTSListeningAudio from "@/components/IELTSListeningAudio";
+import IELTSWritingChart from "@/components/IELTSWritingChart";
 import { toast } from "sonner";
 
 // IELTS Types
@@ -95,6 +97,13 @@ const IELTSPractice = () => {
   const [writingPrompt, setWritingPrompt] = useState("");
   const [writingAnswer, setWritingAnswer] = useState("");
   const [graphImage, setGraphImage] = useState("");
+  const [chartType, setChartType] = useState<"bar" | "line" | "pie" | "table" | "process" | "map">("bar");
+  const [chartDescription, setChartDescription] = useState("");
+  
+  // Listening State
+  const [listeningAudioText, setListeningAudioText] = useState("");
+  const [listeningQuestions, setListeningQuestions] = useState<IELTSQuestion[]>([]);
+  const [audioPlayed, setAudioPlayed] = useState(false);
   
   // Audio & Voice
   const [status, setStatus] = useState<"idle" | "listening" | "thinking" | "speaking">("idle");
@@ -732,6 +741,9 @@ Return JSON:
         <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl">
           <div className="flex h-16 items-center justify-between px-4 md:px-6">
             <div className="flex items-center gap-3">
+              <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => setIsStarted(false)}>
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
               <span className="font-medium">Writing Task {writingTask}</span>
             </div>
             <div className="flex items-center gap-4">
@@ -746,33 +758,83 @@ Return JSON:
           </div>
         </header>
 
-        <main className="flex-1 p-4 md:p-6">
-          <div className="max-w-4xl mx-auto space-y-6">
-            {/* Task Prompt */}
-            <div className="glass-card rounded-2xl p-6">
-              <h3 className="font-semibold mb-4">Task {writingTask} Prompt</h3>
-              {writingTask === 1 && graphImage && (
-                <div className="mb-4 p-8 bg-muted/30 rounded-xl text-center text-4xl">
-                  {graphImage}
-                </div>
-              )}
-              <p className="text-muted-foreground leading-relaxed">{writingPrompt}</p>
+        <main className="flex-1 p-4 md:p-6 overflow-auto">
+          <div className="max-w-5xl mx-auto grid lg:grid-cols-2 gap-6">
+            {/* Task Prompt & Chart */}
+            <div className="space-y-4">
+              <div className="glass-card rounded-2xl p-6">
+                <h3 className="font-semibold mb-4">Task {writingTask} Prompt</h3>
+                
+                {writingTask === 1 && (
+                  <div className="mb-6">
+                    {/* Chart Type Selector */}
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {(["bar", "line", "pie", "table", "process", "map"] as const).map((type) => (
+                        <button
+                          key={type}
+                          onClick={() => setChartType(type)}
+                          className={`px-3 py-1.5 rounded-lg text-sm capitalize transition-all ${
+                            chartType === type
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted hover:bg-muted/80"
+                          }`}
+                        >
+                          {type}
+                        </button>
+                      ))}
+                    </div>
+                    
+                    {/* AI Generated Chart */}
+                    <IELTSWritingChart
+                      chartType={chartType}
+                      topic={writingPrompt}
+                      onChartGenerated={(desc) => setChartDescription(desc)}
+                    />
+                  </div>
+                )}
+                
+                <p className="text-muted-foreground leading-relaxed">
+                  {writingTask === 1 
+                    ? chartDescription || writingPrompt 
+                    : writingPrompt}
+                </p>
+                
+                <p className="mt-4 text-sm text-primary">
+                  Write at least {minWords} words.
+                </p>
+              </div>
             </div>
 
             {/* Writing Area */}
-            <div className="glass-card rounded-2xl p-6">
-              <Textarea
-                value={writingAnswer}
-                onChange={(e) => setWritingAnswer(e.target.value)}
-                placeholder="Start writing your response here..."
-                className="min-h-[400px] text-base leading-relaxed resize-none border-0 focus-visible:ring-0 bg-transparent"
-              />
-            </div>
+            <div className="space-y-4">
+              <div className="glass-card rounded-2xl p-6 min-h-[500px] flex flex-col">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold">Your Response</h3>
+                  <span className={`text-sm px-3 py-1 rounded-full ${
+                    wordCount >= minWords 
+                      ? "bg-success/20 text-success" 
+                      : "bg-muted text-muted-foreground"
+                  }`}>
+                    {wordCount} words
+                  </span>
+                </div>
+                
+                <Textarea
+                  value={writingAnswer}
+                  onChange={(e) => setWritingAnswer(e.target.value)}
+                  placeholder="Start writing your response here..."
+                  className="flex-1 min-h-[400px] text-base leading-relaxed resize-none border-0 focus-visible:ring-0 bg-transparent"
+                />
+              </div>
 
-            <div className="flex justify-end">
-              <Button onClick={submitWriting} className="bg-success hover:bg-success/90">
-                Submit Writing
-              </Button>
+              <div className="flex justify-end gap-3">
+                <Button variant="outline" onClick={() => setWritingAnswer("")}>
+                  Clear
+                </Button>
+                <Button onClick={submitWriting} className="bg-success hover:bg-success/90">
+                  Submit Writing
+                </Button>
+              </div>
             </div>
           </div>
         </main>
@@ -891,13 +953,158 @@ Return JSON:
     );
   }
 
-  // Default listening module placeholder
+  // Render Listening Module
+  if (selectedModule === "listening" && isStarted) {
+    const sampleListeningText = `Welcome to the IELTS Listening test. You will hear a conversation between two students discussing their university project. 
+    
+    Sarah: Hi Tom, have you started working on our environmental science project yet?
+    
+    Tom: Yes, I've been researching renewable energy sources. I think we should focus on solar and wind power.
+    
+    Sarah: That sounds good. I found some interesting statistics about solar panel efficiency. Did you know that modern panels can convert up to 22 percent of sunlight into electricity?
+    
+    Tom: That's impressive. I read that wind turbines are becoming more cost-effective too. The global capacity has doubled in the last five years.
+    
+    Sarah: We should also mention the challenges. What about energy storage?
+    
+    Tom: Good point. Battery technology is improving, but it's still the main obstacle for renewable energy adoption.`;
+
+    const listeningQs: IELTSQuestion[] = [
+      {
+        id: "l1",
+        type: "multiple-choice",
+        question: "What is the main topic of the students' project?",
+        options: ["Climate change", "Renewable energy sources", "Battery technology", "Environmental pollution"],
+        correctAnswer: "Renewable energy sources"
+      },
+      {
+        id: "l2",
+        type: "short-answer",
+        question: "What percentage of sunlight can modern solar panels convert to electricity?",
+        correctAnswer: "22 percent"
+      },
+      {
+        id: "l3",
+        type: "multiple-choice",
+        question: "According to Tom, what has happened to global wind turbine capacity?",
+        options: ["It has tripled", "It has doubled", "It has remained stable", "It has decreased"],
+        correctAnswer: "It has doubled"
+      },
+      {
+        id: "l4",
+        type: "short-answer",
+        question: "What does Tom identify as the main obstacle for renewable energy adoption?",
+        correctAnswer: "Battery technology"
+      }
+    ];
+
+    return (
+      <div className="min-h-screen flex flex-col bg-background">
+        <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl">
+          <div className="flex h-16 items-center justify-between px-4 md:px-6">
+            <div className="flex items-center gap-3">
+              <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => setIsStarted(false)}>
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+              <span className="font-medium">Listening Section {currentSection}</span>
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-muted-foreground">
+                Question {currentQuestion + 1} / {listeningQs.length}
+              </span>
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-primary/10 text-primary">
+                <Clock className="w-4 h-4" />
+                <span className="font-mono font-medium">{formatTime(timeRemaining)}</span>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1 p-4 md:p-6">
+          <div className="max-w-4xl mx-auto space-y-6">
+            {/* Audio Player */}
+            <div className="glass-card rounded-2xl p-6">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <Headphones className="w-5 h-5 text-primary" />
+                Audio Section {currentSection}
+              </h3>
+              <IELTSListeningAudio
+                text={sampleListeningText}
+                language="english"
+                onComplete={() => setAudioPlayed(true)}
+              />
+              <p className="text-sm text-muted-foreground mt-3">
+                Listen carefully. You will hear the audio only twice.
+              </p>
+            </div>
+
+            {/* Questions */}
+            <div className="glass-card rounded-2xl p-6">
+              <h3 className="font-semibold mb-4">
+                Question {currentQuestion + 1}: {listeningQs[currentQuestion]?.question}
+              </h3>
+              
+              {listeningQs[currentQuestion]?.options ? (
+                <RadioGroup
+                  value={answers[listeningQs[currentQuestion].id] || ""}
+                  onValueChange={(value) => handleAnswer(listeningQs[currentQuestion].id, value)}
+                  className="space-y-3"
+                >
+                  {listeningQs[currentQuestion].options.map((option, i) => (
+                    <div key={i} className="flex items-center space-x-3 p-3 rounded-xl border border-border/50 hover:border-primary/50 transition-colors">
+                      <RadioGroupItem value={option} id={`l-option-${i}`} />
+                      <Label htmlFor={`l-option-${i}`} className="flex-1 cursor-pointer">
+                        {option}
+                      </Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+              ) : (
+                <input
+                  type="text"
+                  value={answers[listeningQs[currentQuestion]?.id] || ""}
+                  onChange={(e) => handleAnswer(listeningQs[currentQuestion].id, e.target.value)}
+                  placeholder="Type your answer..."
+                  className="w-full p-4 rounded-xl border border-border bg-background/50 focus:ring-2 focus:ring-primary"
+                />
+              )}
+            </div>
+
+            {/* Navigation */}
+            <div className="flex items-center justify-between">
+              <Button 
+                variant="outline" 
+                onClick={() => setCurrentQuestion(prev => Math.max(0, prev - 1))}
+                disabled={currentQuestion === 0}
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Previous
+              </Button>
+              
+              {currentQuestion === listeningQs.length - 1 ? (
+                <Button onClick={submitTest} className="bg-success hover:bg-success/90">
+                  Submit Answers
+                </Button>
+              ) : (
+                <Button onClick={() => setCurrentQuestion(prev => prev + 1)}>
+                  Next
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              )}
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // Default fallback
   return (
     <div className="min-h-screen flex flex-col bg-background items-center justify-center">
       <div className="text-center">
-        <Headphones className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
-        <h2 className="text-2xl font-semibold mb-2">Listening Module</h2>
-        <p className="text-muted-foreground mb-6">Coming soon with audio-based practice</p>
+        <GraduationCap className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
+        <h2 className="text-2xl font-semibold mb-2">IELTS Practice</h2>
+        <p className="text-muted-foreground mb-6">Select a module to begin</p>
         <Button variant="outline" onClick={() => setSelectedModule(null)}>
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Modules
