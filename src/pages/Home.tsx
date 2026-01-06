@@ -17,7 +17,9 @@ import {
   Shield,
   Smile,
   Eye,
-  Lock
+  Lock,
+  Star,
+  Baby
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
@@ -59,6 +61,18 @@ const features = [
     gradient: "from-amber-400 via-orange-400 to-rose-400",
     glowColor: "hsl(25 90% 55% / 0.3)",
     isPrimary: false,
+  },
+  {
+    id: "kids",
+    title: "Blitix Kids",
+    subtitle: "Ages 2.5 – 9",
+    description: "Fun learning with pictures, sounds, stories, and games — made for young children. Safe and parent-approved.",
+    icon: Star,
+    path: "/kids",
+    gradient: "from-pink-400 via-rose-400 to-orange-300",
+    glowColor: "hsl(340 80% 60% / 0.3)",
+    isPrimary: false,
+    isKids: true,
   },
 ];
 
@@ -196,19 +210,24 @@ const Home = () => {
         </motion.div>
 
         {/* Feature Cards */}
-        <div className="grid md:grid-cols-3 gap-6 w-full max-w-6xl px-4">
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 w-full max-w-7xl px-4">
           {features.map((feature, index) => (
             <motion.div
               key={feature.id}
               initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.6 + index * 0.15 }}
+              className={feature.isKids ? "md:col-span-2 lg:col-span-1" : ""}
             >
               <Link to={feature.path}>
                 <div 
-                  className={`${feature.isPrimary ? 'feature-card-primary' : 'feature-card'} h-full cursor-pointer group`}
+                  className={`${feature.isPrimary ? 'feature-card-primary' : feature.isKids ? 'feature-card-kids' : 'feature-card'} h-full cursor-pointer group`}
                   style={{ 
-                    '--hover-glow': feature.glowColor 
+                    '--hover-glow': feature.glowColor,
+                    ...(feature.isKids ? { 
+                      background: 'linear-gradient(135deg, rgba(255,182,193,0.2) 0%, rgba(255,218,185,0.2) 100%)',
+                      borderColor: 'rgba(255,182,193,0.5)'
+                    } : {})
                   } as React.CSSProperties}
                 >
                   {/* Icon */}
@@ -221,7 +240,7 @@ const Home = () => {
 
                   {/* Content */}
                   <div className="space-y-2">
-                    <span className="text-xs font-medium text-primary uppercase tracking-wider">
+                    <span className={`text-xs font-medium uppercase tracking-wider ${feature.isKids ? 'text-pink-500' : 'text-primary'}`}>
                       {feature.subtitle}
                     </span>
                     <h3 className="text-2xl font-display font-semibold text-foreground group-hover:text-primary transition-colors">
@@ -233,19 +252,29 @@ const Home = () => {
                   </div>
 
                   {/* Arrow indicator */}
-                  <div className="mt-6 flex items-center gap-2 text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className={`mt-6 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity ${feature.isKids ? 'text-pink-500' : 'text-primary'}`}>
                     <span className="text-sm font-medium">
-                      {feature.id === "search" ? "Try AI Search" : 
-                       feature.id === "language" ? "Start Learning" : 
-                       "Practice Interviews"} →
+                      {feature.id === "search" ? "Try AI Search →" : 
+                       feature.id === "language" ? "Start Learning →" : 
+                       feature.id === "kids" ? "Open Kids →" :
+                       "Practice Interviews →"}
                     </span>
                   </div>
 
-                  {/* Primary badge */}
+                  {/* Badge */}
                   {feature.isPrimary && (
                     <div className="absolute top-4 right-4">
                       <span className="text-xs font-medium px-2 py-1 rounded-full bg-primary/20 text-primary border border-primary/30">
                         Popular
+                      </span>
+                    </div>
+                  )}
+                  
+                  {feature.isKids && (
+                    <div className="absolute top-4 right-4">
+                      <span className="text-xs font-medium px-2 py-1 rounded-full bg-pink-500/20 text-pink-500 border border-pink-500/30 flex items-center gap-1">
+                        <Baby className="w-3 h-3" />
+                        Kids
                       </span>
                     </div>
                   )}

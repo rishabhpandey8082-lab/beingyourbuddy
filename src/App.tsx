@@ -12,6 +12,7 @@ import LanguageLearning from "./pages/LanguageLearning";
 import IELTSPractice from "./pages/IELTSPractice";
 import GoetheExam from "./pages/GoetheExam";
 import InterviewPractice from "./pages/InterviewPractice";
+import BlitixKids from "./pages/BlitixKids";
 import About from "./pages/About";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
@@ -35,6 +36,7 @@ const App = () => (
             <Route path="/ielts" element={<IELTSPractice />} />
             <Route path="/goethe" element={<GoetheExam />} />
             <Route path="/interview" element={<InterviewPractice />} />
+            <Route path="/kids" element={<BlitixKids />} />
             <Route path="/about" element={<About />} />
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/terms" element={<Terms />} />
