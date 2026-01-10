@@ -12,7 +12,7 @@ import { useReliableSpeechRecognition } from "@/hooks/useReliableSpeechRecogniti
 import { toast } from "sonner";
 
 type AgeMode = "little" | "young" | null;
-type ActivityType = "tap-learn" | "sounds" | "colors" | "words" | "speak" | "games" | "stories" | null;
+type ActivityType = "tap-learn" | "sounds" | "colors" | "words" | "speak" | "games" | "stories" | "drawing" | "counting" | "memory" | null;
 
 interface LearningItem {
   emoji: string;
@@ -336,6 +336,9 @@ const BlitixKids = () => {
           { id: "speak" as ActivityType, name: "Speak & Repeat", emoji: "🎤", color: "from-purple-400 to-violet-400", desc: "Practice speaking" },
           { id: "games" as ActivityType, name: "Mini Games", emoji: "🎮", color: "from-cyan-400 to-teal-400", desc: "Fun learning games" },
           { id: "stories" as ActivityType, name: "Story Time", emoji: "📖", color: "from-amber-400 to-yellow-400", desc: "Read simple stories" },
+          { id: "drawing" as ActivityType, name: "Draw & Create", emoji: "🎨", color: "from-pink-400 to-rose-400", desc: "Drawing with stickers" },
+          { id: "counting" as ActivityType, name: "Counting Fun", emoji: "🔢", color: "from-green-400 to-emerald-400", desc: "Learn to count" },
+          { id: "memory" as ActivityType, name: "Memory Match", emoji: "🧠", color: "from-indigo-400 to-purple-400", desc: "Match the pairs" },
         ];
 
     return (

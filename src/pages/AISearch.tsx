@@ -260,7 +260,7 @@ const AISearch = () => {
               <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
                 <Sparkles className="h-4 w-4 text-white" />
               </div>
-              <h1 className="text-lg font-semibold">Cognify Search</h1>
+              <h1 className="text-lg font-semibold">Blitix Search</h1>
             </div>
           </div>
 
